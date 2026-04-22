@@ -1,0 +1,16 @@
+# Environments
+.venv/
+__pycache__/
+
+# Large Data & Embeddings
+*.pt
+*.pth
+*.npy
+*.mp3
+*.wav
+
+# Third-party code
+mert_fairseq/
+
+# OS files
+.DS_Store
