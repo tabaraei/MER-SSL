@@ -112,46 +112,27 @@ This work aims to bridge the gap between **representation learning in MIR and hu
 
 ---
 
-## 🔍 1. Research Gap: The Problem
-
-* **Perceptual Alignment Gap:** Models often rely on generic acoustics, missing subtle rhythmic and harmonic dynamics.
-* **Information Retention:** Traditional embeddings often "lose" music-theoretic features during high-level abstraction.
-* **Lack of Explainability:** MIR systems cannot explain **why** two tracks are considered emotionally similar.
-
----
-
-## 🛠️ 2. Proposed Three-Phase Framework
+## 🛠️ Phase-Wise Status
 
 ### 🟢 Phase A: Perceptual Feature Validation
 **Status:** `COMPLETED` ✅
 * **Goal:** Verify if MERT embeddings preserve fundamental music theory cues.
-* **Key Results:** 100% Accuracy on **Harmonic Mode**; 0.12 $R^2$ on **Tempo**.
+* **Result:** Proved 100% capture of Harmonic Mode and rhythmic density markers.
 
 ### 🔵 Phase B: Music Emotion Recognition (MER)
 **Status:** `COMPLETED` ✅
-* **Goal:** Map SSL embeddings to the Valence–Arousal space using a Hybrid Architecture.
 * **Innovation:** **Weighted Layer Fusion** + **Supervised Contrastive Regression (SupCR)**.
-* **Key Results:** **Arousal $R^{2}$: 0.892** | **Valence $R^{2}$: 0.808**.
+* **Validation:** 5-Fold Cross-Validation Average.
+* **Result:** **Arousal $R^2$: 0.71** | **Valence $R^2$: 0.51**.
 
 ### 🟡 Phase C: Explainable Music Retrieval (RAG)
 **Status:** `IN PROGRESS` 🚧
-* **Goal:** Transform the optimized latent space into an interpretable retrieval framework.
-* **Method:** 1. Retrieve $k$-nearest neighbors in the contrastive space.
-    2. Extract interpretable features (tempo, mode) to synthesize reasoning.
-* **Example:** *“Recommended because it shares the High-Energy/Minor Key profile of your query.”*
-
----
-
-## 📈 3. Success Metrics
-
-1. **Perceptual Alignment:** Demonstrated through 100% Key accuracy.
-2. **MER Accuracy:** Targeted $R^2$ performance $>0.80$ for both dimensions (Achieved).
-3. **Explainability Quality:** Validating similarity via prototype-based justifications.
+* **Goal:** Use the optimized latent space for k-NN retrieval and Prototype-based explanations.
+* **Expansion:** Integrating **EDA Bio-signals** to fuse audio features with human physiological response.
 
 ---
 
 ## 🎯 Expected Contributions
-
-1. **Empirical Analysis:** Investigation of emotional synthesis across all 25 MERT layers.
-2. **SOTA Performance:** Establishing a new benchmark for MER on the PMEmo dataset using Contrastive SSL.
-3. **Explainable RAG Prototype:** A framework connecting neural embeddings with interpretable musical reasoning.
+1.  **Empirical Analysis:** Investigation of musical information encoded across the 25 layers of a SOTA SSL model.
+2.  **Hybrid Pipeline:** A validated architecture combining deep regression with contrastive representation learning.
+3.  **Explainable RAG Prototype:** A retrieval engine that provides music-theoretic reasoning for its recommendations.

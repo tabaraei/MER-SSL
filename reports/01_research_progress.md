@@ -1,41 +1,45 @@
 # 🎼 Research Progress: Music Emotion Recognition (MER) via SSL
 **Student:** Arvin Jafari Moghadam Fard  
-**Status:** Phase A & B Finalized | Phase C Implementation  
+**Status:** Phase A & B Finalized (Validated via 5-Fold CV) | Phase C Implementation  
 
 ---
 
 ## 📅 Executive Summary
-This report summarizes the development of an explainable MER system utilizing the **MERT** self-supervised model. The project has transitioned from a baseline single-layer regression to a **Hybrid Representation Learning** architecture. This new approach, featuring **Weighted Layer Fusion** and **Supervised Contrastive Regression (SupCR)**, has achieved State-of-the-Art (SOTA) performance on the **PMEmo2019** dataset, particularly in overcoming the traditional "Valence Gap."
+This report documents the transition from exploratory probing to a robust **Hybrid Affective Architecture**. The primary focus was overcoming the "Black Box" nature of Self-Supervised Learning (SSL) by implementing a multi-layer synthesis approach. While initial results showed extreme performance ($R^2 > 0.80$), subsequent diagnostics identified significant overfitting. The project has since moved to a **5-Fold Cross-Validation** framework, establishing a scientifically valid baseline for unseen music retrieval.
 
 ---
 
 ## ✅ Phase A: Perceptual Feature Validation (Completed)
-**Objective:** To verify if MERT embeddings preserve essential music theory cues before emotional modeling.
+**Objective:** Verify if the MERT latent space preserves music-theoretic cues necessary for explainability.
 
-* **Harmonic Mode Probing:** Achieved **100% accuracy** in Major/Minor classification.
-* **Tempo Probing:** Achieved an $R^2$ of **0.12**, confirming that rhythmic density is encoded in the latent space.
-* **XAI Justification:** These features were extracted **directly from the embeddings**, proving the latent space retains critical music-theoretic information necessary for human-interpretable retrieval.
+* **Harmonic Mode Probing:** Implemented a linear probe on the frozen embeddings. Result: **100% Accuracy** in Major/Minor detection.
+* **Tempo Probing:** Achieved an $R^2$ of **0.12**. This suggests that while rhythmic density is present, it is likely encoded non-linearly or across multiple layers.
+* **Significance:** This phase confirmed that "information loss" is not occurring at the encoding level, providing a solid foundation for XAI-driven retrieval.
 
 ---
 
 ## ✅ Phase B: Hybrid Affective Modeling (Finalized)
-**Objective:** To recover "lost" information and optimize the latent space for emotion prediction.
+**Objective:** Optimize the mapping from SSL embeddings to the Valence-Arousal (V-A) circumplex.
 
-* **Architecture Expansion:** Implemented a **Weighted Layer Fusion** head that learns to optimally combine features from all 25 MERT layers, ensuring low-level acoustic cues (early layers) and high-level semantics (final layers) are both preserved.
-* **Optimization:** Applied **Supervised Contrastive Regression (SupCR)** to physically reorganize the latent space based on emotional distance.
-* **Key Performance Results:**
-    * **Arousal ($R^2$): 0.892** (SOTA level).
-    * **Valence ($R^2$): 0.808** (Significant breakthrough in mood prediction).
+### 1. Architectural Design: Weighted Layer Fusion
+To address the supervisor's concern regarding the potential loss of low-level acoustic information in deep layers, we moved beyond single-layer probing (Layer 24).
+* **Mechanism:** A learnable `WeightedLayerFusion` module was developed. It utilizes a `softmax` activation over 25 trainable parameters to assign an importance weight to every MERT layer.
+* **Purpose:** This allows the model to dynamically capture rhythmic/acoustic features from early layers and semantic/affective features from the late layers simultaneously.
+
+### 2. Optimization: Supervised Contrastive Regression (SupCR)
+Standard MSE loss often fails to capture the subjective "neighborhoods" of emotion. We implemented a dual-loss objective: $Total Loss = Loss_{MSE} + \lambda Loss_{SupCR}$.
+* **SupCR Objective:** Forces the model to cluster songs with similar emotional coordinates (within a **0.30 threshold**) while pushing dissimilar tracks apart.
+* **Geometric Impact:** This reorganizes the 1024-dimensional latent space to be perceptually meaningful, which is a prerequisite for Phase C retrieval.
+
+### 3. Scientific Validation & Overfitting Diagnostic
+Initial results indicated $R^2$ values of **0.89 (Arousal)** and **0.80 (Valence)**. Diagnostic testing revealed these were **training-set artifacts** (memorization).
+* **Action Taken:** Implemented **5-Fold Cross-Validation**, **Weight Decay (1e-2)**, and **Dropout (0.4)**.
+* **Validated Results:** * **Mean Arousal $R^2$: 0.709**
+    * **Mean Valence $R^2$: 0.507**
+* **Conclusion:** These scores represent the model's **true generalization** on unseen data, matching contemporary 2025 SOTA benchmarks while ensuring academic integrity.
 
 ---
 
-## 🧠 Explainability (XAI) Strategy
-To address concerns regarding "black-box" embeddings, this project utilizes a **Representation Probing** and **Latent Clustering** defense:
-1. **Information Retention:** The massive $R^2$ surge proves that the "lost information" in previous models was effectively recovered via weighted fusion.
-2. **Prototype-Based Interpretation:** The organized contrastive space allows Phase C to utilize "Prototypes" (e.g., "This song is similar to the 'High-Energy/Major' prototype") for explainable retrieval.
-
----
-
-## 🚀 Next Steps (Phase C)
-* **Explainable Retrieval Engine:** Utilizing the optimized 0.89/0.80 latent space to build a **Retrieval-Augmented Generation (RAG)** framework.
-* **Mechanism:** Using the learned "Prototypes" to generate textual reasoning for music similarity.
+## 🚀 Next Steps: Phase C & Expansion
+* **Explainable RAG:** Utilizing the contrastive latent space to retrieve "Prototypes" and generate human-readable reasoning for music recommendations.
+* **EDA Fusion:** Integrating Electrodermal Activity (physiological) signals to ground the energy-based predictions in biological human response.
