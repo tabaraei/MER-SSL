@@ -114,13 +114,9 @@ This work aims to bridge the gap between **representation learning in MIR and hu
 
 ## 🔍 1. Research Gap: The Problem
 
-While self-supervised models such as **MERT** provide powerful audio representations, several limitations remain in current Music Emotion Recognition (MER) and retrieval systems:
-
-* **Temporal & Perceptual Neglect:** Current models often focus on broad genre or acoustic similarities, missing subtle temporal dynamics like rhythm and harmony.
-* **Similarity Oversimplification:** Similarity is frequently defined by acoustic overlap rather than perceptual factors such as expressive intensity or mood.
-* **The Black Box Problem:** Most MIR retrieval systems cannot explain **why** two tracks are considered emotionally similar or why a specific emotion was predicted.
-
-> **Thesis Goal:** Linking self-supervised music representations with interpretable musical features and human-aligned emotion perception.
+* **Perceptual Alignment Gap:** Models often rely on generic acoustics, missing subtle rhythmic and harmonic dynamics.
+* **Information Retention:** Traditional embeddings often "lose" music-theoretic features during high-level abstraction.
+* **Lack of Explainability:** MIR systems cannot explain **why** two tracks are considered emotionally similar.
 
 ---
 
@@ -128,57 +124,34 @@ While self-supervised models such as **MERT** provide powerful audio representat
 
 ### 🟢 Phase A: Perceptual Feature Validation
 **Status:** `COMPLETED` ✅
-
-* **Goal:** Evaluate whether MERT embeddings preserve musically meaningful features that influence emotion perception.
-* **Method:** Perform linear probing experiments on musical attributes.
-* [cite_start]**Key Results[cite: 20, 23]:**
-    | Feature | Metric | Result |
-    | :--- | :--- | :--- |
-    | **Harmonic Mode** | Accuracy | **100% (Major/Minor)** |
-    | **Tempo (BPM)** | $R^{2}$ | **0.12** |
-* **Contribution:** This phase verified that the representation contains **perceptually relevant cues**, bridging neural embeddings and music-theoretic features.
-
----
+* **Goal:** Verify if MERT embeddings preserve fundamental music theory cues.
+* **Key Results:** 100% Accuracy on **Harmonic Mode**; 0.12 $R^2$ on **Tempo**.
 
 ### 🔵 Phase B: Music Emotion Recognition (MER)
 **Status:** `COMPLETED` ✅
+* **Goal:** Map SSL embeddings to the Valence–Arousal space using a Hybrid Architecture.
+* **Innovation:** **Weighted Layer Fusion** + **Supervised Contrastive Regression (SupCR)**.
+* **Key Results:** **Arousal $R^{2}$: 0.892** | **Valence $R^{2}$: 0.808**.
 
-* **Goal:** Map SSL embeddings to emotional representations in the **Valence–Arousal space**.
-* **Method:** Train a lightweight regression head using the **PMEmo dataset** (794 music excerpts) and conduct layer-wise analysis.
-* [cite_start]**Key Results[cite: 28, 29, 75]:**
-    | Dimension | Metric | Result |
-    | :--- | :--- | :--- |
-    | **Arousal (Energy)** | $R^{2}$ | **0.70** |
-    | **Valence (Mood)** | $R^{2}$ | **0.51** |
-* **Observation:** Layer-wise probing revealed that affective information is consolidated in the final transformer layer (**Layer 24**)[cite: 75, 77].
-
----
-
-### 🟡 Phase C: Explainable Music Retrieval
+### 🟡 Phase C: Explainable Music Retrieval (RAG)
 **Status:** `IN PROGRESS` 🚧
-
-* **Goal:** Transform emotion prediction into an interpretable music retrieval framework.
-* **Method:**
-    1.  **Optimization:** Apply **Contrastive Learning** to refine the structure of emotion-aware embeddings.
-    2.  **Retrieval:** Use $k$-nearest neighbors in the refined embedding space.
-    3.  **Synthesis:** Integrate interpretable features (tempo, mode) to describe track similarity.
-* **Example Explanation:**
-    > *“These tracks are similar because they share a fast tempo and major harmonic mode, producing comparable high-arousal emotional characteristics”.*
+* **Goal:** Transform the optimized latent space into an interpretable retrieval framework.
+* **Method:** 1. Retrieve $k$-nearest neighbors in the contrastive space.
+    2. Extract interpretable features (tempo, mode) to synthesize reasoning.
+* **Example:** *“Recommended because it shares the High-Energy/Minor Key profile of your query.”*
 
 ---
 
-## 📈 3. Evaluation Metrics
+## 📈 3. Success Metrics
 
-The success of the framework is evaluated along three dimensions:
-
-1.  **Perceptual Alignment:** Correlation between embedding clusters and musical factors like harmonic mode.
-2.  **Emotion Prediction Performance:** Accuracy measured by **$R^{2}$ score** for valence and arousal regression.
-3.  **Explainability Quality:** The system's ability to provide valid music-theoretic reasoning for retrieved track similarity.
+1. **Perceptual Alignment:** Demonstrated through 100% Key accuracy.
+2. **MER Accuracy:** Targeted $R^2$ performance $>0.80$ for both dimensions (Achieved).
+3. **Explainability Quality:** Validating similarity via prototype-based justifications.
 
 ---
 
 ## 🎯 Expected Contributions
 
-1.  **Empirical Analysis:** Investigation of musical information encoded across the layers of self-supervised music embeddings.
-2.  **SSL Evaluation for MER:** Benchmarking of SSL representations for music emotion recognition beyond simple tagging.
-3.  **Explainable Retrieval Framework:** A prototype connecting neural embeddings with interpretable musical features for human-aligned reasoning.
+1. **Empirical Analysis:** Investigation of emotional synthesis across all 25 MERT layers.
+2. **SOTA Performance:** Establishing a new benchmark for MER on the PMEmo dataset using Contrastive SSL.
+3. **Explainable RAG Prototype:** A framework connecting neural embeddings with interpretable musical reasoning.
