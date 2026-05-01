@@ -1,0 +1,113 @@
+=================================================================
+🎵  QUERY: Song ID 760
+=================================================================
+  Emotion Region  : Low Arousal / High Valence (HVLA)
+  Arousal         : low (0.352)
+  Valence         : positive (0.571)
+  Physiology      : elevated electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=53%)
+
+📋  RETRIEVAL EXPLANATION
+-----------------------------------------------------------------
+  Songs retrieved via cosine similarity in the emotion-aware latent space of the MERT-based Hybrid model (Weighted Layer Fusion + SupCR loss). Query occupies 'HVLA' — calm and positive affective region.
+
+🔍  TOP-5 RETRIEVED SONGS
+-----------------------------------------------------------------
+  ┌─ Rank 1 | Song ID 481 (cosine sim = 0.9977)
+  │  Quadrant     : LVLA (melancholic and subdued)
+  │  Arousal      : low (0.380)
+  │  Valence      : neutral (0.460)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=53%)
+  │  Δ from query : valence ↓0.11 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 2 | Song ID 116 (cosine sim = 0.9974)
+  │  Quadrant     : LVLA (melancholic and subdued)
+  │  Arousal      : low (0.352)
+  │  Valence      : neutral (0.460)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=50%)
+  │  Δ from query : valence ↓0.11 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 3 | Song ID 699 (cosine sim = 0.9967)
+  │  Quadrant     : LVLA (melancholic and subdued)
+  │  Arousal      : low (0.338)
+  │  Valence      : negative (0.317)
+  │  Physiology   : low electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=12%)
+  │  Δ from query : valence ↓0.25 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 4 | Song ID 716 (cosine sim = 0.9965)
+  │  Quadrant     : LVLA (melancholic and subdued)
+  │  Arousal      : low (0.254)
+  │  Valence      : neutral (0.460)
+  │  Physiology   : low electrodermal activity (several SCR peaks, rising trend, high-arousal ratio=9%)
+  │  Δ from query : arousal ↓0.10, valence ↓0.11 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 5 | Song ID 221 (cosine sim = 0.9964)
+  │  Quadrant     : HVLA (calm and positive)
+  │  Arousal      : low (0.408)
+  │  Valence      : neutral (0.540)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=37%)
+  │  Δ from query : arousal ↑0.06 vs query
+  └─────────────────────────────────────────────────────────
+
+🧠  MUSIC-THEORETIC SUMMARY
+-----------------------------------------------------------------
+  avg neighbor arousal=0.346 | valence=0.448 | mean cosine sim=0.9969
+  Mood arc options (Δarousal = 0.15): Energizing order → [716, 699, 116, 481, 221] (low to high arousal, builds energy). Wind-down order → [221, 481, 116, 699, 716] (high to low arousal, eases into calm).
+=================================================================
+
+=================================================================
+RAG PROMPT (sent to LLM):
+=================================================================
+You are a music recommendation assistant with expertise in music psychology and emotion-aware AI retrieval systems. Explain why a set of songs was recommended in a warm, human way — like a knowledgeable friend who understands both the science and the feeling of music. Avoid technical jargon unless briefly defining it.
+
+━━━ QUERY SONG (ID 760) ━━━
+  Emotional character : calm and positive — peaceful, warm, content, gentle, uplifting
+  Emotional region    : Low Arousal / High Valence (HVLA)
+  Arousal             : low (0.352)
+  Valence             : positive (0.571)
+  Music theory        : major keys or modal scales, consonant harmonies, warm acoustic timbres. Tempo: slow to moderate (60–100 BPM).
+  Genre family        : ambient, classical, acoustic folk, soft jazz, lo-fi, chillout
+  Listener profile    : listeners seeking relaxation, positive focus, or a calming background atmosphere
+  Physiology          : Listeners of this track showed moderate physiological engagement with highly variable skin conductance and gradually escalating arousal. The physiological profile features few distinct peaks — smooth continuous engagement. High-arousal proportion: 53% of listening duration (normalized across dataset).
+
+━━━ RETRIEVED SONGS (most similar in latent space) ━━━
+  Rank 1 — Song 481: melancholic and subdued (LVLA), A=0.380 V=0.460, sim=0.9977 [valence slightly lower]
+    └ Physiology: Listeners of this track showed moderate physiological engagement with highly variable skin conductance and gradually escalating arousal. The physiological profile features few distinct peaks — smooth continuous engagement. High-arousal proportion: 53% of listening duration (normalized across dataset).
+  Rank 2 — Song 116: melancholic and subdued (LVLA), A=0.352 V=0.460, sim=0.9974 [valence slightly lower]
+    └ Physiology: Listeners of this track showed moderate physiological engagement with highly variable skin conductance and gradually escalating arousal. The physiological profile features few distinct peaks — smooth continuous engagement. High-arousal proportion: 50% of listening duration (normalized across dataset).
+  Rank 3 — Song 699: melancholic and subdued (LVLA), A=0.338 V=0.317, sim=0.9967 [valence slightly lower]
+    └ Physiology: Listeners of this track showed a calm physiological state with moderately variable skin conductance and gradually escalating arousal. The physiological profile features moderate emotional peaks. High-arousal proportion: 12% of listening duration (normalized across dataset).
+  Rank 4 — Song 716: melancholic and subdued (LVLA), A=0.254 V=0.460, sim=0.9965 [arousal slightly lower and valence slightly lower]
+    └ Physiology: Listeners of this track showed a calm physiological state with stable skin conductance and gradually escalating arousal. The physiological profile features frequent emotional activation peaks. High-arousal proportion: 9% of listening duration (normalized across dataset).
+  Rank 5 — Song 221: calm and positive (HVLA), A=0.408 V=0.540, sim=0.9964 [arousal slightly higher]
+    └ Physiology: Listeners of this track showed moderate physiological engagement with highly variable skin conductance and gradually escalating arousal. The physiological profile features moderate emotional peaks. High-arousal proportion: 37% of listening duration (normalized across dataset).
+
+━━━ CONTRASTIVE FOILS (most dissimilar — NOT retrieved) ━━━
+  Song 941: energetic and positive (HVHA), A=0.958 V=1.000, sim=0.6792 — rejected (emotionally distant from query)
+  Song 132: intense and negative (LVHA), A=0.831 V=0.063, sim=0.7002 — rejected (emotionally distant from query)
+  Song 578: energetic and positive (HVHA), A=0.887 V=0.857, sim=0.7048 — rejected (emotionally distant from query)
+  → Use these to explain WHAT MAKES the retrieved songs special: what emotional qualities they share that clearly distinguish them from the foils.
+
+━━━ MODEL EXPLANATION (MERT layer attribution) ━━━
+  The model's learned MERT layer fusion (across 25 transformer layers) relies most on low-level acoustic features (timbre, onset, spectral texture). Layer 0 carries the highest individual weight (253.5%). Layer-group contributions — low-level: 1109% | mid-level: -679% | high-level: -330%. This means retrieval is primarily driven by sound texture and timbre.
+
+━━━ MOOD TRAJECTORY ━━━
+  Mood arc options (Δarousal = 0.15): Energizing order → [716, 699, 116, 481, 221] (low to high arousal, builds energy). Wind-down order → [221, 481, 116, 699, 716] (high to low arousal, eases into calm).
+
+━━━ YOUR TASK ━━━
+Write a response with exactly these four parts:
+1. RECOMMENDATION (2–3 sentences): Talk directly to the listener. Start with: 'Like your track, these songs inhabit a calm, bright emotional space — perfect for unwinding or focused work.' then say why these specific songs fit.
+2. EMOTIONAL CONNECTION (1–2 sentences): What binds all retrieved songs to the query emotionally? Reference the V-A plane naturally if helpful.
+3. WHY NOT THE OTHERS (1 sentence, only if foils provided): Briefly contrast with the rejected songs — what emotional gap separates them.
+4. LISTENING EXPERIENCE (1 sentence): Describe the shared physiological or mood experience these songs create for the listener.
+Total length: 150–200 words. Warm tone, no bullet points.
+
+Response:
+
+=================================================================
+LLM EXPLANATION:
+=================================================================
+Like your track, these songs inhabit a calm, bright emotional space — perfect for unwinding or focused work. I recommend exploring Song 481, which shares a similar melancholic undertone with your track, but brings a soothing warmth that lifts the mood, while maintaining an intimate atmosphere. Similarly, Song 116 and Song 699 evoke a sense of gentle nostalgia, allowing listeners to relax and reflect.
+
+These songs all reside in the High Valence Low Arousal (HVLA) region of the emotional spectrum, where positive emotions are balanced by a calming presence that encourages introspection. This emotional resonance creates a sense of comfort and serenity, which is why these tracks can help listeners transition from a busy day to a peaceful evening or calm focus.
+
+The contrast with rejected songs like Song 941 and Song 132 lies in their intense emotional polarities, creating an overwhelming energy that makes it difficult for the listener to settle into a calming state.

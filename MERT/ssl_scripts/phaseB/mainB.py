@@ -199,6 +199,9 @@ if __name__ == "__main__":
         y_t, y_p, ccc = evaluate(model, test_loader, device, use_eda)
         print_results("SIMPLE SPLIT EVALUATION", y_t, y_p, ccc)
 
+        torch.save(model.state_dict(), "best_model.pt")
+        print("💾  Model saved → best_model.pt")
+
     else:
         print("\n🧪 5-Fold Cross-Validation (Balanced & Differential Optimizer)...")
         kf = KFold(n_splits=5, shuffle=True, random_state=42)
@@ -220,6 +223,7 @@ if __name__ == "__main__":
 
             y_t, y_p, ccc = evaluate(model, test_loader, device, use_eda)
             all_y_true.append(y_t); all_y_pred.append(y_p); all_ccc.append(ccc)
+            last_model = model
 
         # 4. Final Aggregation
         all_true, all_pred = np.vstack(all_y_true), np.vstack(all_y_pred)
@@ -227,11 +231,14 @@ if __name__ == "__main__":
         avg_ccc_v = np.mean([c["CCC_Valence"] for c in all_ccc])
         print_results("🏆 K-FOLD FINAL AVERAGE", all_true, all_pred, {"CCC_Arousal": avg_ccc_a, "CCC_Valence": avg_ccc_v})
 
+        torch.save(last_model.state_dict(), "best_model.pt")
+        print("💾  Model saved → best_model.pt")
+
         # 5. Layer Analysis
         base_m = model.base_model if use_eda else model
         analyze_layer_weights(base_m, save_path="layer_weights.npy")
         plot_layer_weights(base_m, save_path="layer_weights_kfold.png")
-
+    
 
 # """
 # mainB.py — Master Training Script for MER Phase B
