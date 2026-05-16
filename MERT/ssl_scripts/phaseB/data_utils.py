@@ -85,6 +85,77 @@ def load_pmemo_data(feature_path: str, label_path: str):
     return X.float(), Y, matched_ids
 
 # =============================================================================
+# 1b. Dual-SSL Loading (MERT + wav2vec2)
+# =============================================================================
+
+def _match_dict_to_csv(data_dict: dict, df: pd.DataFrame, id_col: str) -> dict:
+    """
+    Reuses the robust ID-matching pattern from load_pmemo_data (handles
+    ID as 760 int, 760.0 float, or '760' str).
+
+    Returns {df_row_index: tensor} for every CSV row whose cleaned ID is a
+    key in data_dict. Keyed by DataFrame index so multiple dicts can be
+    intersected on common rows.
+    """
+    matched = {}
+    for idx, raw_id in df[id_col].items():
+        clean_id = str(int(raw_id)) if isinstance(raw_id, (int, float, np.number)) else str(raw_id)
+        if clean_id in data_dict:
+            matched[idx] = torch.as_tensor(data_dict[clean_id])
+    return matched
+
+
+def load_pmemo_dual_ssl(mert_path: str, w2v_path: str, label_path: str):
+    """
+    Loads MERT and wav2vec2 all-layer embeddings and aligns them to the
+    PMEmo annotations. Only songs present in ALL THREE sources
+    (MERT ∩ wav2vec ∩ CSV) are kept, in matched order.
+
+    Returns:
+        X_mert      : (N, 25, 1024)
+        X_w2v       : (N, 13,  768)
+        Y           : (N, 2)  [arousal, valence], min-max normalized to [0, 1]
+        matched_ids : list[str] of length N
+    """
+    print(f"  Loading MERT embeddings from:     {mert_path}")
+    mert_data = torch.load(mert_path, map_location="cpu")
+    print(f"  Loading wav2vec2 embeddings from: {w2v_path}")
+    w2v_data = torch.load(w2v_path, map_location="cpu")
+
+    print(f"  Loading labels from: {label_path}")
+    df = pd.read_csv(label_path)
+
+    ar_col = [c for c in df.columns if "arousal" in c.lower()][0]
+    va_col = [c for c in df.columns if "valence" in c.lower()][0]
+    id_col = [c for c in df.columns if any(x in c.lower() for x in ["music", "id"])][0]
+
+    def _norm(col):
+        return (col - col.min()) / (col.max() - col.min() + 1e-8)
+    df[ar_col] = _norm(df[ar_col])
+    df[va_col] = _norm(df[va_col])
+
+    mert_matched = _match_dict_to_csv(mert_data, df, id_col)
+    w2v_matched  = _match_dict_to_csv(w2v_data, df, id_col)
+
+    common_idx = [i for i in df.index if i in mert_matched and i in w2v_matched]
+    if not common_idx:
+        raise ValueError(
+            "No overlapping IDs across MERT, wav2vec, and CSV. "
+            f"MERT∩CSV={len(mert_matched)}, w2v∩CSV={len(w2v_matched)}."
+        )
+
+    X_mert = torch.stack([mert_matched[i] for i in common_idx]).float()
+    X_w2v  = torch.stack([w2v_matched[i]  for i in common_idx]).float()
+
+    df_matched  = df.loc[common_idx]
+    Y           = torch.tensor(df_matched[[ar_col, va_col]].values, dtype=torch.float32)
+    matched_ids = df_matched[id_col].astype(str).tolist()
+
+    print(f"  ✅ Dual-SSL matched {len(X_mert)} samples (MERT ∩ wav2vec ∩ CSV)")
+    return X_mert, X_w2v, Y, matched_ids
+
+
+# =============================================================================
 # 2. Multimodal EDA Functions (Ensuring compatibility)
 # =============================================================================
 

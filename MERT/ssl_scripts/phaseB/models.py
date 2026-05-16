@@ -5,8 +5,11 @@ Contains:
   - WeightedLayerFusion : Learnable softmax fusion over all 25 MERT layers
   - MERModel            : Full hybrid model (baseline or hybrid mode)
   - get_layer_weights   : Utility to extract and analyze learned weights (NEW)
+  - DualSSLModel        : MERT + wav2vec2 dual-encoder fusion model (NEW)
+  - analyze_dual_layer_weights : Side-by-side layer attribution for both encoders (NEW)
 """
 
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -128,6 +131,80 @@ class MERModel(nn.Module):
 
 
 # =============================================================================
+# 2b. NEW: Dual-SSL Model — MERT + wav2vec2
+# =============================================================================
+
+class DualSSLModel(nn.Module):
+    """
+    Dual self-supervised encoder model for Music Emotion Recognition.
+
+    Fuses two complementary frozen SSL encoders via independent learnable
+    layer-fusion heads, then concatenates the fused representations:
+        - MERT-v1-330M  : music-pretrained  (25 layers, 1024-d)
+        - wav2vec2-base  : speech-pretrained (13 layers,  768-d)
+
+    Motivation (Simonetta et al. 2024): speech-pretrained representations
+    capture complementary acoustic cues (voice timbre, articulation, energy
+    dynamics) that music-only pretraining misses — especially useful for
+    breaking the Valence ceiling.
+
+    Input shapes  : x_mert (B, 25, 1024), x_w2v (B, 13, 768)
+    Output shapes : preds (B, 2) [arousal, valence], latent_norm (B, bottleneck)
+    """
+    def __init__(
+        self,
+        mert_layers: int = 25,  mert_dim: int = 1024,
+        w2v_layers:  int = 13,  w2v_dim:  int = 768,
+        bottleneck:  int = 128, dropout:  float = 0.4,
+    ):
+        super().__init__()
+        self.fusion_mert = WeightedLayerFusion(mert_layers, mert_dim)
+        self.fusion_w2v  = WeightedLayerFusion(w2v_layers,  w2v_dim)
+
+        concat_dim = mert_dim + w2v_dim  # 1024 + 768 = 1792
+
+        self.head = nn.Sequential(
+            nn.Linear(concat_dim, 512),
+            nn.LayerNorm(512),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(512, 256),
+            nn.LayerNorm(256),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, bottleneck),
+            nn.LayerNorm(bottleneck),
+            nn.ReLU(),
+            nn.Dropout(dropout / 2),
+        )
+        self.regressor = nn.Linear(bottleneck, 2)
+
+    def forward(self, x_mert: torch.Tensor, x_w2v: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Args:
+            x_mert : (B, 25, 1024)  stacked MERT layer outputs
+            x_w2v  : (B, 13,  768)  stacked wav2vec2 layer outputs
+        Returns:
+            preds       : (B, 2)
+            latent_norm : (B, bottleneck)  L2-normalized for SupCR
+        """
+        fused_m = self.fusion_mert(x_mert)              # (B, 1024)
+        fused_w = self.fusion_w2v(x_w2v)                # (B,  768)
+        fused   = torch.cat([fused_m, fused_w], dim=1)  # (B, 1792)
+        latent  = self.head(fused)                      # (B, bottleneck)
+        latent_norm = F.normalize(latent, dim=1)        # L2-normalize for SupCR
+        preds   = self.regressor(latent_norm)
+        return preds, latent_norm
+
+    def get_layer_weights(self) -> dict:
+        """Return both encoders' learned softmax weight distributions."""
+        return {
+            "mert": self.fusion_mert.get_weights(),
+            "w2v":  self.fusion_w2v.get_weights(),
+        }
+
+
+# =============================================================================
 # 3. NEW: Layer Weight Analysis Utilities
 # =============================================================================
 
@@ -224,3 +301,94 @@ def plot_layer_weights(model: MERModel, save_path: str = "layer_weights.png"):
     plt.savefig(save_path, dpi=150)
     plt.close()
     print(f"📈 Layer weight plot saved to: {save_path}")
+
+
+# =============================================================================
+# 4. NEW: Dual-SSL Layer Weight Analysis
+# =============================================================================
+
+def _analyze_weight_vector(weights: np.ndarray, name: str, save_path: str = None) -> dict:
+    """
+    Shared analysis logic (mirrors analyze_layer_weights) applied to a single
+    encoder's softmax weight vector. Region boundaries are proportional thirds
+    so it generalizes across encoders with different layer counts.
+    """
+    n = len(weights)
+    a, b = n // 3, 2 * n // 3
+
+    early_mass = weights[:a].sum()
+    mid_mass   = weights[a:b].sum()
+    late_mass  = weights[b:].sum()
+    top_layers = np.argsort(weights)[::-1][:5].tolist()
+    entropy    = float(-np.sum(weights * np.log(weights + 1e-10)))
+
+    result = {
+        "weights":     weights,
+        "top_layers":  top_layers,
+        "early_mass":  float(early_mass),
+        "mid_mass":    float(mid_mass),
+        "late_mass":   float(late_mass),
+        "entropy":     entropy,
+    }
+
+    print(f"\n📊 Layer Weight Analysis — {name} ({n} layers)")
+    print(f"  Top-5 layers by importance : {top_layers}")
+    print(f"  Early third (0-{a-1}) mass  : {early_mass:.3f}")
+    print(f"  Mid   third ({a}-{b-1}) mass : {mid_mass:.3f}")
+    print(f"  Late  third ({b}-{n-1}) mass : {late_mass:.3f}")
+    print(f"  Weight entropy             : {entropy:.4f}  (max={np.log(n):.4f})")
+
+    if save_path:
+        np.save(save_path, weights)
+        print(f"  Weights saved to: {save_path}")
+
+    return result
+
+
+def analyze_dual_layer_weights(model: DualSSLModel, save_dir: str = ".") -> dict:
+    """
+    Analyzes the learned layer-fusion weights of BOTH encoders in a
+    DualSSLModel. Saves:
+      - layer_weights_mert.npy
+      - layer_weights_w2v.npy
+      - dual_layer_weights.png  (side-by-side bar plot)
+
+    Returns a dict {"mert": <analysis>, "w2v": <analysis>}.
+    """
+    w = model.get_layer_weights()
+    res_mert = _analyze_weight_vector(
+        w["mert"], "MERT", os.path.join(save_dir, "layer_weights_mert.npy")
+    )
+    res_w2v = _analyze_weight_vector(
+        w["w2v"], "wav2vec2", os.path.join(save_dir, "layer_weights_w2v.npy")
+    )
+
+    import matplotlib.pyplot as plt
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 4))
+
+    wm = w["mert"]
+    axes[0].bar(np.arange(len(wm)), wm, color="#4C9BE8", edgecolor="white", linewidth=0.5)
+    axes[0].set_title("MERT-v1-330M — Learned Layer Weights", fontsize=12, fontweight="bold")
+    axes[0].set_xlabel("MERT Transformer Layer")
+    axes[0].set_ylabel("Softmax Weight")
+    axes[0].set_xticks(np.arange(len(wm)))
+    axes[0].set_xticklabels([str(i) for i in range(len(wm))], fontsize=7)
+    axes[0].grid(axis="y", alpha=0.3)
+
+    ww = w["w2v"]
+    axes[1].bar(np.arange(len(ww)), ww, color="#E84C4C", edgecolor="white", linewidth=0.5)
+    axes[1].set_title("wav2vec2-base — Learned Layer Weights", fontsize=12, fontweight="bold")
+    axes[1].set_xlabel("wav2vec2 Layer (0 = CNN feature projection)")
+    axes[1].set_ylabel("Softmax Weight")
+    axes[1].set_xticks(np.arange(len(ww)))
+    axes[1].set_xticklabels([str(i) for i in range(len(ww))], fontsize=8)
+    axes[1].grid(axis="y", alpha=0.3)
+
+    plt.tight_layout()
+    out_path = os.path.join(save_dir, "dual_layer_weights.png")
+    plt.savefig(out_path, dpi=150)
+    plt.close()
+    print(f"📈 Dual layer weight plot saved to: {out_path}")
+
+    return {"mert": res_mert, "w2v": res_w2v}

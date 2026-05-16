@@ -182,6 +182,70 @@ Generates all thesis figures from the saved model and layer weights:
 
 ---
 
+### B3 — Dual-SSL (MERT + wav2vec2)
+
+Adds a **second self-supervised encoder** alongside MERT. `wav2vec2-base`
+is pretrained on *speech*, so it captures complementary acoustic cues —
+voice timbre, articulation, energy dynamics — that MERT (music-only
+pretrained) misses. The two encoders each get an independent learnable
+`WeightedLayerFusion`; their fused representations are concatenated
+(1024 + 768 = 1792-d) and passed through a deeper regression head.
+
+> **Motivation (Simonetta et al. 2024):** joint domains share an emotional
+> feature space — wav2vec2 (speech-pretrained) provides complementary
+> acoustic cues that MERT (music-only) lacks, especially for valence.
+> Their work pushed Valence R² from 0.52 → 0.78 by combining domains.
+
+**Step 1 — Extract wav2vec2 embeddings** (run **once**, like Step 0):
+
+```bash
+cd ssl_scripts/
+python extract_pmemo_wav2vec.py
+```
+
+- Model: `facebook/wav2vec2-base` — **public, no HuggingFace auth required**.
+- Sample rate: 16000 Hz (wav2vec2 requirement; MERT uses 24000 Hz).
+- **Output:** `phaseB/pmemo_wav2vec_all_layers.pt` — a dict
+  `{music_id: tensor(13, 768)}` (CNN feature projection + 12 transformer
+  layers), same format convention as the MERT all-layers file.
+
+**Step 2 — Train the dual-SSL model:**
+
+```bash
+cd phaseB/
+python mainB.py --encoder dual --mode kfold --epochs 100 \
+    --feat_path pmemo_mert_all_layers.pt \
+    --w2v_path  pmemo_wav2vec_all_layers.pt \
+    --csv_path  /datasets/emotions/PMEmo2019/annotations/static_annotations.csv
+```
+
+**Key arguments:**
+
+| Argument | Options | Description |
+| :--- | :--- | :--- |
+| `--encoder` | `mert` / `dual` | `mert` = unchanged default; `dual` = MERT + wav2vec2 |
+| `--w2v_path` | path | wav2vec2 all-layers file (default `pmemo_wav2vec_all_layers.pt`) |
+
+> `--use_eda` is **not** supported together with `--encoder dual` yet
+> (tri-modal MERT + wav2vec2 + EDA is a later iteration). The script
+> raises a clear error if both are passed.
+
+**Expected runtime:** comparable to B1 (the encoders are frozen — only
+the two fusion modules + head train). ~5-fold × 100 epochs on GPU.
+
+**Output:**
+- `best_model.pt` — last fold's `DualSSLModel` weights
+- `layer_weights_mert.npy` — learned MERT layer fusion weights (25,)
+- `layer_weights_w2v.npy` — learned wav2vec2 layer fusion weights (13,)
+- `dual_layer_weights.png` — side-by-side bar plot of both distributions
+
+**Expectation:** the speech-pretrained branch should lift **Valence R²**
+above the MERT-only ceiling (0.51) while leaving Arousal roughly stable;
+inspect `dual_layer_weights.png` to see which wav2vec2 layers the model
+relies on (early CNN/acoustic vs. later phonetic layers).
+
+---
+
 ## Phase C — Explainable Retrieval System
 
 Builds a prototype-based retrieval system on top of the Phase B latent space and generates two-layer explanations: a deterministic technical report and an LLM-powered humanized recommendation.
