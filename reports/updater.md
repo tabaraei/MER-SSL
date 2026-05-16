@@ -82,6 +82,86 @@ Precision@k and Silhouette scores haven't been computed (pending index rebuild).
 | Deep MER (Dutta & Chanda) | 2021 | Mel-Spec + CRNN | ~0.45 | ~0.55 | — |
 | Hybrid SSL Multi-task | 2023 | Wav2Vec2 + Attention | ~0.48 | ~0.61 | — |
 | IAENG 2025 Hybrid | 2025 | Multimodal Freq-Domain | ~0.60 | ~0.62 | — |
-| **This Work (MERT Hybrid+EDA)** | **2026** | **Music-SSL + WeightedFusion + SupCR** | **0.5075** | **0.6738** | **0.77 / 0.85** |
+| This Work (MERT Hybrid+EDA) | 2026 | Music-SSL + WeightedFusion + SupCR | 0.5075 | 0.6738 | 0.77 / 0.85 |
+| **This Work (dual: MERT + wav2vec2)** | **2026** | **Dual-SSL + WeightedFusion + SupCR** | **0.5601** | **0.6810** | **0.72 / 0.81** |
 
-Note: CCC (Concordance Correlation Coefficient) is the AVEC standard metric — it simultaneously penalizes poor correlation, mean bias, and variance mismatch. Our CCC of 0.8543 on arousal is competitive with the field.
+Note: CCC (Concordance Correlation Coefficient) is the AVEC standard metric — it simultaneously penalizes poor correlation, mean bias, and variance mismatch. The current best configuration is **dual (MERT + wav2vec2), no IADS-E**; adding IADS-E joint data did not improve PMEmo valence (see Step 2 below — negative cross-domain SSL transfer).
+
+---
+
+## Step 2 Results Placeholder — Joint SSL (IADS-E)
+
+### Motivation
+Simonetta et al. (2024), *"Joint Learning of Emotions in Music and Generalized
+Sounds"*, show that mixing music (PMEmo) with generalized environmental sounds
+(IADS-E) lifts Valence R² to ~0.78 / Arousal ~0.86, because the two domains
+**share a common emotional V-A space** and complement each other's coverage of
+the V-A plane (music clusters high-valence; environmental sounds fill the
+low-valence / high-arousal region). They used hand-crafted openSMILE features.
+We replicate the *idea* with **dual SSL encoders + a learned domain embedding**
+(`DualSSLDomainModel`), keeping the thesis focus on *assessing the goodness of
+SSL representations* rather than hand-crafted features. K-fold is on PMEmo only;
+IADS-E augments training; evaluation stays on PMEmo test folds (apples-to-apples
+vs. Step-1 dual). A `mix_k`/`mix_p` sweep replicates Simonetta's ratio ablation.
+
+### Honest framing
+- If Valence R² **rises above 0.56** (current dual best): SSL domain transfer
+  works — a positive replication that generalized-sound SSL features carry
+  transferable affective structure.
+- If Valence R² **stays flat (~0.56) or drops**: SSL domain transfer is *less*
+  effective than Simonetta's hand-crafted features here — a **publishable
+  negative finding** (SSL embeddings may over-specialize to their pretraining
+  domain, limiting cross-domain emotional transfer). Either outcome is a
+  legitimate thesis contribution about the goodness of SSL models.
+
+### Results — partial sweep (2026-05-16)
+
+Baselines: Audio-only MERT V 0.5055 / A 0.6518 · **MERT+wav2vec (dual, best)
+V 0.5601 / A 0.6810**. Eval = PMEmo test folds only (never on IADS-E).
+
+| Config (k, p) | R² Arousal | R² Valence | CCC Arousal | CCC Valence | vs. dual (ΔV) | Status |
+|:--|:--:|:--:|:--:|:--:|:--:|:--:|
+| dual (no IADS-E, Step 1) | **0.6810** | **0.5601** | 0.8142 | 0.7182 | — | reference |
+| k=1.0, p=1.0 | 0.6093 | 0.4874 | 0.8173 | 0.7413 | −0.073 | done |
+| k=1.0, p=0.25 | 0.5752 | 0.3888 | 0.7800 | 0.6725 | −0.171 | done |
+| k=1.0, p=0.0 | −0.3136 | −0.2848 | 0.2314 | −0.0983 | n/a | degenerate¹ |
+| k=1.0, p=0.5 | — | — | — | — | — | interrupted |
+| k≤0.75 (any p) | — | — | — | — | — | not yet run |
+
+¹ `p=0.0` removes **all** music from training (`train = music(0) + sound(768)`),
+then tests on music → negative R² is expected; a sanity check, not a result.
+
+> Auto-generated: `phaseB/logs/ablation_summary.md` (re-run `summarize_ablation.py`).
+
+### Observed conclusion (so far → leaning negative finding)
+
+Across **every** completed joint config, Valence R² is **below** the dual
+baseline (0.5601). The pattern is monotone: the more music kept (`p`↑), the
+closer to dual — i.e. IADS-E is **diluting**, not complementing, the music
+mapping. At full IADS-E (`k=1.0`) the best joint result (V 0.4874, p=1.0) is
+−0.073 below dual. This currently supports the **pre-registered negative
+finding**: SSL embeddings (MERT music-pretrained, wav2vec2 speech-pretrained)
+do **not** transfer emotional structure across the music↔environmental-sound
+boundary as well as Simonetta's hand-crafted openSMILE features did. Notable
+secondary effect: **CCC Valence rose** at k=1,p=1 (0.7182→0.7413) even as R²
+fell — IADS-E broadens the valence *range/ranking* the model tracks while
+adding *scatter/bias* on music specifically.
+
+**Caveat before declaring this final:** the joint sampler holds IADS-E at
+≈20 % of every batch *regardless of `k`*, so the `k` axis under-tests the
+weak-transfer regime (only `p` was effectively varied). A proper conclusion
+needs a domain-weight `λ` that scales IADS-E gradient mass (lever #1 below) so
+the transfer curve can be traced near `λ→0` (= dual). Until then this is a
+**strong directional negative result, not yet a closed one.**
+
+### Thesis takeaway
+
+- **Headline result stays:** dual (MERT + wav2vec2), **Valence R² 0.5601 /
+  Arousal 0.6810** — no IADS-E. This is the number to report.
+- **Joint learning** is written up as a tested hypothesis with a (currently)
+  **negative outcome**: SSL cross-domain emotional transfer underperforms the
+  hand-crafted-feature literature — a legitimate contribution on *the goodness
+  and limits of SSL models*, which is the thesis' stated focus.
+- Open follow-ups if pursued: (1) domain-weight `λ`; (2) per-domain SupCR
+  (music↔sound attract-only); (3) freeze MERT fusion on sound batches;
+  (4) category-targeted IADS-E mixing (low-valence/high-arousal only).

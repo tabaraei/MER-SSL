@@ -12,5 +12,9 @@ __pycache__/
 # Third-party code
 mert_fairseq/
 
+# Generated figures / extracted audio
+MERT/ssl_scripts/phaseB/_iadse_audio/
+MERT/ssl_scripts/phaseB/dual_layer_weights.png
+
 # OS files
 .DS_Store

@@ -246,6 +246,96 @@ relies on (early CNN/acoustic vs. later phonetic layers).
 
 ---
 
+### B4 — Joint Learning with IADS-E (Simonetta et al. 2024, SSL-native)
+
+Mixes **PMEmo music** with **IADS-E generalized environmental sounds** during
+training. The two domains share a common emotional V-A space but cover
+*different regions* of it — environmental sounds populate the low-valence /
+high-arousal area PMEmo is sparse in. A learned **domain embedding** (music=0,
+sound=1) conditions the emotion head (`DualSSLDomainModel`). This replicates
+Simonetta et al. (2024) (their openSMILE result: Valence R² 0.78, Arousal 0.86)
+but with **dual SSL encoders** — keeping the thesis focus on assessing SSL
+representations. K-fold is on PMEmo **only**; IADS-E augments the train split;
+evaluation is on PMEmo test folds (apples-to-apples vs. B3).
+
+> IADS-E audio ships only inside `/datasets/emotions/IADS-E/IADS-E.zip` (the
+> on-disk category folders are permission-locked). Extract once to a scratch
+> dir — the source dataset is never modified.
+
+**Step 1 — Prepare IADS-E audio + labels** (run once, from `ssl_scripts/`):
+
+```bash
+mkdir -p phaseB/_iadse_audio
+unzip -o "/datasets/emotions/IADS-E/IADS-E.zip" "*.wav" -d phaseB/_iadse_audio
+
+cd phaseB/
+# Convert "Sound Ratings.xlsx" → iadse_labels.csv (stdlib only; no openpyxl).
+python convert_iadse_labels.py --out iadse_labels.csv
+```
+
+- Audio: `phaseB/_iadse_audio/IADS-E sound stimuli (IADS-2 is not included)/<Category>/<ID>_2.wav` (768 clips, 10 categories).
+- Labels: `iadse_labels.csv` → columns `sound_id, valence, arousal, category` (SAM 1–9; 935 rows, 768 with audio). The loader normalizes 1–9 → [0,1].
+
+**Step 2 — Extract IADS-E SSL embeddings** (the generalized extractors are now
+CLI-driven; recursive over category subfolders):
+
+```bash
+cd ssl_scripts/
+python extract_pmemo.py        --audio_dir "phaseB/_iadse_audio" \
+    --out_path phaseB/iadse_mert_all_layers.pt    --ext wav
+python extract_pmemo_wav2vec.py --audio_dir "phaseB/_iadse_audio" \
+    --out_path phaseB/iadse_wav2vec_all_layers.pt --ext wav
+```
+
+> No-arg `python extract_pmemo.py` still produces the PMEmo
+> `pmemo_mert_all_layers.pt` exactly as before (backward compatible).
+
+**Step 3 — Smoke test (no GPU/data needed):**
+
+```bash
+cd phaseB/
+python test_joint_smoke.py        # → ✅ Joint SSL domain smoke test passed
+```
+
+**Step 4 — Single-config sanity run (one ratio, verify it trains):**
+
+```bash
+python mainB.py --encoder dual_joint --mode kfold --epochs 100 \
+    --feat_path pmemo_mert_all_layers.pt \
+    --w2v_path  pmemo_wav2vec_all_layers.pt \
+    --iadse_mert iadse_mert_all_layers.pt \
+    --iadse_w2v  iadse_wav2vec_all_layers.pt \
+    --iadse_csv  iadse_labels.csv \
+    --csv_path /datasets/emotions/PMEmo2019/annotations/static_annotations.csv \
+    --mix_k 1.0 --mix_p 1.0 --eval_on pmemo
+```
+
+**Step 5 — Full ratio ablation (Simonetta Fig. 4 sweep) + summary:**
+
+```bash
+bash run_joint_ablation.sh          # 9 runs → logs/ablation_k*_p*.log
+python summarize_ablation.py        # → logs/ablation_summary.md
+```
+
+**Key arguments:**
+
+| Argument | Default | Description |
+| :--- | :--- | :--- |
+| `--encoder dual_joint` | — | Enables `DualSSLDomainModel` + IADS-E augmentation |
+| `--mix_k` | 1.0 | Fraction of IADS-E kept (Simonetta k) |
+| `--mix_p` | 1.0 | Fraction of PMEmo-train kept (Simonetta p) |
+| `--eval_on` | `pmemo` | `pmemo` = headline metric only; `both` = also report IADS-E hold-out |
+| `--iadse_csv` | `iadse_labels.csv` | Output of `convert_iadse_labels.py` |
+
+**Success criterion:** **Valence R² > 0.56** (beats the B3 dual best of 0.5601)
+on PMEmo test folds. If valence stays flat/drops, that is a *publishable
+negative result* about SSL cross-domain transfer (see `reports/updater.md`).
+
+**Output:** `best_model.pt`, `layer_weights_mert.npy`, `layer_weights_w2v.npy`,
+`dual_layer_weights.png`, `logs/ablation_summary.md`.
+
+---
+
 ## Phase C — Explainable Retrieval System
 
 Builds a prototype-based retrieval system on top of the Phase B latent space and generates two-layer explanations: a deterministic technical report and an LLM-powered humanized recommendation.

@@ -6,6 +6,7 @@ Contains:
   - MERModel            : Full hybrid model (baseline or hybrid mode)
   - get_layer_weights   : Utility to extract and analyze learned weights (NEW)
   - DualSSLModel        : MERT + wav2vec2 dual-encoder fusion model (NEW)
+  - DualSSLDomainModel  : DualSSL + learned domain embedding (joint learning) (NEW)
   - analyze_dual_layer_weights : Side-by-side layer attribution for both encoders (NEW)
 """
 
@@ -198,6 +199,76 @@ class DualSSLModel(nn.Module):
 
     def get_layer_weights(self) -> dict:
         """Return both encoders' learned softmax weight distributions."""
+        return {
+            "mert": self.fusion_mert.get_weights(),
+            "w2v":  self.fusion_w2v.get_weights(),
+        }
+
+
+# =============================================================================
+# 2c. NEW: Dual-SSL + Domain Conditioning (Simonetta joint-learning, SSL-native)
+# =============================================================================
+
+class DualSSLDomainModel(nn.Module):
+    """
+    DualSSLModel + a learned domain embedding concatenated before the head.
+
+    Conditions the emotion mapping on the source domain:
+        domain 0 = music (PMEmo)   |   domain 1 = generalized sound (IADS-E)
+
+    This is the SSL-native replication of Simonetta et al. (2024)'s shared
+    emotional feature space: both domains are projected into one V-A latent,
+    but the head can offset/condition on which domain a sample came from.
+    """
+    def __init__(
+        self,
+        mert_layers: int = 25, mert_dim: int = 1024,
+        w2v_layers:  int = 13, w2v_dim:  int = 768,
+        domain_emb_dim: int = 16, bottleneck: int = 128, dropout: float = 0.4,
+    ):
+        super().__init__()
+        self.fusion_mert = WeightedLayerFusion(mert_layers, mert_dim)
+        self.fusion_w2v  = WeightedLayerFusion(w2v_layers,  w2v_dim)
+        self.domain_emb  = nn.Embedding(2, domain_emb_dim)
+
+        concat_dim = mert_dim + w2v_dim + domain_emb_dim  # 1024 + 768 + 16 = 1808
+
+        self.head = nn.Sequential(
+            nn.Linear(concat_dim, 512),
+            nn.LayerNorm(512),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(512, 256),
+            nn.LayerNorm(256),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, bottleneck),
+            nn.LayerNorm(bottleneck),
+            nn.ReLU(),
+            nn.Dropout(dropout / 2),
+        )
+        self.regressor = nn.Linear(bottleneck, 2)
+
+    def forward(self, x_mert: torch.Tensor, x_w2v: torch.Tensor,
+                domain: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Args:
+            x_mert : (B, 25, 1024)
+            x_w2v  : (B, 13,  768)
+            domain : (B,) long tensor in {0, 1}
+        Returns:
+            preds (B, 2), latent_norm (B, bottleneck)
+        """
+        fm = self.fusion_mert(x_mert)          # (B, 1024)
+        fw = self.fusion_w2v(x_w2v)            # (B,  768)
+        de = self.domain_emb(domain)           # (B,  16)
+        fused = torch.cat([fm, fw, de], dim=1)  # (B, 1808)
+        latent = self.head(fused)
+        latent_norm = F.normalize(latent, dim=1)
+        return self.regressor(latent_norm), latent_norm
+
+    def get_layer_weights(self) -> dict:
+        """Both encoders' learned softmax weight distributions."""
         return {
             "mert": self.fusion_mert.get_weights(),
             "w2v":  self.fusion_w2v.get_weights(),

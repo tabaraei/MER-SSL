@@ -1,0 +1,64 @@
+/home/arvin/thesis/mert/MERT/ssl_scripts/phaseB/data_utils.py:122: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  mert_data = torch.load(mert_path, map_location="cpu")
+/home/arvin/thesis/mert/MERT/ssl_scripts/phaseB/data_utils.py:124: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  w2v_data = torch.load(w2v_path, map_location="cpu")
+/home/arvin/thesis/mert/MERT/ssl_scripts/phaseB/data_utils.py:185: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  mert_raw = torch.load(mert_path, map_location="cpu")
+/home/arvin/thesis/mert/MERT/ssl_scripts/phaseB/data_utils.py:187: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  w2v_raw = torch.load(w2v_path, map_location="cpu")
+
+🚀 MER Phase B | model=hybrid | mode=kfold | encoder=dual_joint
+
+🌍 Joint Learning | loading PMEmo (domain=0) + IADS-E (domain=1)...
+  Loading MERT embeddings from:     pmemo_mert_all_layers.pt
+  Loading wav2vec2 embeddings from: pmemo_wav2vec_all_layers.pt
+  Loading labels from: /datasets/emotions/PMEmo2019/annotations/static_annotations.csv
+  ✅ Dual-SSL matched 767 samples (MERT ∩ wav2vec ∩ CSV)
+  Loading IADS-E MERT from:     iadse_mert_all_layers.pt
+  Loading IADS-E wav2vec from:  iadse_wav2vec_all_layers.pt
+  Loading IADS-E labels from:   iadse_labels.csv
+  ✅ IADS-E matched 768 sounds (MERT ∩ wav2vec ∩ CSV)
+  📐 V-A Quadrant Coverage:
+    PMEmo        N=767  | HVHA=469 HVLA=67 LVHA=64 LVLA=167
+    IADS-E       N=768  | HVHA=123 HVLA=136 LVHA=391 LVLA=118
+  ── Fold 1/5 ──────────────────────────────
+     train = music(153) + sound(768)  | test = PMEmo(154)
+  ── Fold 2/5 ──────────────────────────────
+     train = music(153) + sound(768)  | test = PMEmo(154)
+  ── Fold 3/5 ──────────────────────────────
+     train = music(154) + sound(768)  | test = PMEmo(153)
+  ── Fold 4/5 ──────────────────────────────
+     train = music(154) + sound(768)  | test = PMEmo(153)
+  ── Fold 5/5 ──────────────────────────────
+     train = music(154) + sound(768)  | test = PMEmo(153)
+
+=======================================================
+  🌍 JOINT LEARNING FINAL AVERAGE
+=======================================================
+  R²  Arousal : 0.5752 | Valence : 0.3888
+  CCC Arousal : 0.7800 | CCC Valence : 0.6725
+
+  Per-Quadrant R² Breakdown:
+    HVHA (Happy): A=0.120 | V=-0.270 | n=469
+    HVLA (Calm): A=-2.010 | V=-2.207 | n=67
+    LVHA (Angry): A=-1.745 | V=-3.299 | n=64
+    LVLA (Sad): A=-1.195 | V=-2.802 | n=167
+=======================================================
+💾  Model saved → best_model.pt
+
+📊 Layer Weight Analysis — MERT (25 layers)
+  Top-5 layers by importance : [8, 7, 9, 10, 11]
+  Early third (0-7) mass  : 0.321
+  Mid   third (8-15) mass : 0.325
+  Late  third (16-24) mass : 0.354
+  Weight entropy             : 3.2187  (max=3.2189)
+  Weights saved to: ./layer_weights_mert.npy
+
+📊 Layer Weight Analysis — wav2vec2 (13 layers)
+  Top-5 layers by importance : [8, 12, 7, 9, 6]
+  Early third (0-3) mass  : 0.307
+  Mid   third (4-7) mass : 0.308
+  Late  third (8-12) mass : 0.385
+  Weight entropy             : 2.5649  (max=2.5649)
+  Weights saved to: ./layer_weights_w2v.npy
+📈 Dual layer weight plot saved to: ./dual_layer_weights.png

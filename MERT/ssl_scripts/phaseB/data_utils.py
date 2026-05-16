@@ -7,6 +7,7 @@ Included: All quadrant and multimodal EDA functions.
 """
 
 import os
+import re
 import torch
 import numpy as np
 import pandas as pd
@@ -153,6 +154,141 @@ def load_pmemo_dual_ssl(mert_path: str, w2v_path: str, label_path: str):
 
     print(f"  ✅ Dual-SSL matched {len(X_mert)} samples (MERT ∩ wav2vec ∩ CSV)")
     return X_mert, X_w2v, Y, matched_ids
+
+
+# =============================================================================
+# 1c. IADS-E Joint-Learning Loaders (Simonetta et al. 2024 replication, SSL)
+# =============================================================================
+
+def _iadse_sound_id(stem: str) -> str:
+    """IADS-E audio is named `{SoundID}_2.wav` (e.g. 0319_2, 0015_b_2).
+    The label sheet keys on `SoundID` (0319, 0015_b). Strip one trailing `_2`."""
+    return re.sub(r"_2$", "", stem)
+
+
+def load_iadse_dual_ssl(mert_path, w2v_path, label_path,
+                        valence_col, arousal_col, id_col,
+                        label_min=1.0, label_max=9.0):
+    """
+    Loads IADS-E dual-SSL embeddings (generalized environmental sounds).
+
+    - Embedding .pt keys are audio stems (`0319_2`); the label CSV keys on
+      `SoundID` (`0319`). Keys are normalized via _iadse_sound_id before matching.
+    - Labels are SAM in [label_min, label_max]; normalized to [0, 1].
+    - Y is returned as [arousal, valence] to match load_pmemo_data's ordering.
+
+    Returns:
+        X_mert (N,25,1024), X_w2v (N,13,768), Y (N,2), ids (list[str]),
+        domain = torch.ones(N, dtype=torch.long)   # 1 = generalized sound
+    """
+    print(f"  Loading IADS-E MERT from:     {mert_path}")
+    mert_raw = torch.load(mert_path, map_location="cpu")
+    print(f"  Loading IADS-E wav2vec from:  {w2v_path}")
+    w2v_raw = torch.load(w2v_path, map_location="cpu")
+
+    # Normalize embedding keys: audio stem -> Sound ID (keep-last; no collisions
+    # in practice since every IADS-E clip is the `_2` take)
+    mert_data = {_iadse_sound_id(k): v for k, v in mert_raw.items()}
+    w2v_data  = {_iadse_sound_id(k): v for k, v in w2v_raw.items()}
+
+    print(f"  Loading IADS-E labels from:   {label_path}")
+    df = pd.read_csv(label_path, dtype={id_col: str})
+    df = df.dropna(subset=[valence_col, arousal_col, id_col])
+
+    def _norm(col):
+        return ((col - label_min) / (label_max - label_min)).clip(0.0, 1.0)
+    df = df.copy()
+    df[valence_col] = _norm(df[valence_col].astype(float))
+    df[arousal_col] = _norm(df[arousal_col].astype(float))
+
+    mert_matched = _match_dict_to_csv(mert_data, df, id_col)
+    w2v_matched  = _match_dict_to_csv(w2v_data, df, id_col)
+
+    common_idx = [i for i in df.index if i in mert_matched and i in w2v_matched]
+    if not common_idx:
+        raise ValueError(
+            "No overlapping IDs across IADS-E MERT, wav2vec, and label CSV. "
+            f"MERT∩CSV={len(mert_matched)}, w2v∩CSV={len(w2v_matched)}. "
+            "Did you run the IADS-E extraction commands?"
+        )
+
+    X_mert = torch.stack([mert_matched[i] for i in common_idx]).float()
+    X_w2v  = torch.stack([w2v_matched[i]  for i in common_idx]).float()
+
+    df_m = df.loc[common_idx]
+    # [arousal, valence] to match load_pmemo_data
+    Y = torch.tensor(df_m[[arousal_col, valence_col]].values, dtype=torch.float32)
+    ids = df_m[id_col].astype(str).tolist()
+    domain = torch.ones(len(ids), dtype=torch.long)
+
+    print(f"  ✅ IADS-E matched {len(X_mert)} sounds (MERT ∩ wav2vec ∩ CSV)")
+    return X_mert, X_w2v, Y, ids, domain
+
+
+def _quadrant_counts(Y: torch.Tensor) -> dict:
+    arr = Y.numpy()
+    counts = {name: 0 for name in QUADRANT_NAMES.values()}
+    for a, v in arr:
+        counts[QUADRANT_NAMES[get_emotion_quadrant(a, v)]] += 1
+    return counts
+
+
+def _print_coverage(tag: str, Y: torch.Tensor):
+    c = _quadrant_counts(Y)
+    n = max(len(Y), 1)
+    cells = " | ".join(f"{k.split()[0]}={v} ({100*v/n:.0f}%)" for k, v in c.items())
+    print(f"    {tag:<14} N={len(Y):<4} | {cells}")
+
+
+def build_joint_dataset(pmemo_mert, pmemo_w2v, pmemo_labels_csv,
+                        iadse_mert,  iadse_w2v,  iadse_labels_csv,
+                        iadse_valence_col, iadse_arousal_col, iadse_id_col,
+                        k=1.0, p=1.0, seed=42):
+    """
+    Simonetta mixing: keep round(p * |PMEmo|) music samples (domain 0) and
+    round(k * |IADS-E|) sound samples (domain 1); k, p ∈ [0, 1].
+
+    Returns:
+        X_mert, X_w2v, Y, domain, source_tags
+        source_tags : list[str] like 'pmemo:760' / 'iadse:0319' (debugging)
+
+    Prints per-dataset and combined Russell-quadrant coverage so V-A plane
+    complementarity is visible before training.
+    """
+    rng = np.random.default_rng(seed)
+
+    Xm_p, Xw_p, Y_p, ids_p = load_pmemo_dual_ssl(pmemo_mert, pmemo_w2v, pmemo_labels_csv)
+    dom_p = torch.zeros(len(Y_p), dtype=torch.long)
+
+    Xm_s, Xw_s, Y_s, ids_s, dom_s = load_iadse_dual_ssl(
+        iadse_mert, iadse_w2v, iadse_labels_csv,
+        iadse_valence_col, iadse_arousal_col, iadse_id_col,
+    )
+
+    def _sample(n, ratio):
+        m = int(round(ratio * n))
+        m = max(0, min(n, m))
+        return np.sort(rng.choice(n, size=m, replace=False)) if m < n else np.arange(n)
+
+    pi = _sample(len(Y_p), p)
+    si = _sample(len(Y_s), k)
+
+    X_mert = torch.cat([Xm_p[pi], Xm_s[si]], dim=0)
+    X_w2v  = torch.cat([Xw_p[pi], Xw_s[si]], dim=0)
+    Y      = torch.cat([Y_p[pi],  Y_s[si]],  dim=0)
+    domain = torch.cat([dom_p[pi], dom_s[si]], dim=0)
+    source_tags = (
+        [f"pmemo:{ids_p[i]}" for i in pi] + [f"iadse:{ids_s[i]}" for i in si]
+    )
+
+    print("\n  📐 V-A Quadrant Coverage (Russell):")
+    _print_coverage("PMEmo (kept)", Y_p[pi])
+    _print_coverage("IADS-E (kept)", Y_s[si])
+    _print_coverage("COMBINED", Y)
+    print(f"  🌍 Joint set: {len(Y)} = p·|PMEmo|({len(pi)}) + k·|IADS-E|({len(si)})  "
+          f"[k={k}, p={p}, seed={seed}]")
+
+    return X_mert, X_w2v, Y, domain, source_tags
 
 
 # =============================================================================
