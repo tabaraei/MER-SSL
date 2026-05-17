@@ -2,12 +2,12 @@
 models.py — MER Model Architecture
 ====================================
 Contains:
-  - WeightedLayerFusion : Learnable softmax fusion over all 25 MERT layers
-  - MERModel            : Full hybrid model (baseline or hybrid mode)
-  - get_layer_weights   : Utility to extract and analyze learned weights (NEW)
-  - DualSSLModel        : MERT + wav2vec2 dual-encoder fusion model (NEW)
-  - DualSSLDomainModel  : DualSSL + learned domain embedding (joint learning) (NEW)
-  - analyze_dual_layer_weights : Side-by-side layer attribution for both encoders (NEW)
+  - WeightedLayerFusion      : Learnable softmax fusion over all N SSL layers
+  - MERModel                 : Full hybrid model (baseline or hybrid mode)
+  - DualSSLModel             : MERT + wav2vec2 dual-encoder fusion model
+  - DualSSLBottleneckModel   : DualSSL + per-encoder compression (fixes fusion collapse)
+  - DualSSLDomainModel       : DualSSL + learned domain embedding (joint learning)
+  - analyze_dual_layer_weights : Side-by-side layer attribution + specialization ratio
 """
 
 import os
@@ -206,7 +206,82 @@ class DualSSLModel(nn.Module):
 
 
 # =============================================================================
-# 2c. NEW: Dual-SSL + Domain Conditioning (Simonetta joint-learning, SSL-native)
+# 2c. Dual-SSL + Per-Encoder Bottleneck (fixes fusion collapse)
+# =============================================================================
+
+class DualSSLBottleneckModel(nn.Module):
+    """
+    DualSSL with per-encoder compression bottleneck before concatenation.
+
+    Architecture:
+      MERT  : WeightedLayerFusion(25, 1024) → Linear(1024, proj_dim) + LayerNorm + ReLU → proj_dim
+      w2v   : WeightedLayerFusion(13, 768)  → Linear(768,  proj_dim) + LayerNorm + ReLU → proj_dim
+      cat   : proj_dim * 2  (default 512)
+      head  : Linear(512, 256) → LayerNorm → ReLU → Dropout
+            → Linear(256, 128) → LayerNorm → ReLU → Dropout
+      reg   : Linear(128, 2)
+
+    Why this fixes fusion collapse:
+      Each encoder must compress its 1024/768 mixed-layer features through a
+      proj_dim bottleneck. This information-theoretic squeeze forces the upstream
+      WeightedLayerFusion to be selective — you cannot fit 1024-d of uniform
+      layer mixture through a 256-d gate without learning which layers carry the
+      most relevant signal. Both encoders also contribute exactly proj_dim features
+      (symmetric), giving wav2vec2 equal vote instead of 768/1792 = 43%.
+    """
+    def __init__(
+        self,
+        mert_layers: int = 25,  mert_dim: int = 1024,
+        w2v_layers:  int = 13,  w2v_dim:  int = 768,
+        proj_dim:    int = 256,
+        bottleneck:  int = 128, dropout:  float = 0.4,
+    ):
+        super().__init__()
+        self.fusion_mert = WeightedLayerFusion(mert_layers, mert_dim)
+        self.fusion_w2v  = WeightedLayerFusion(w2v_layers,  w2v_dim)
+
+        self.proj_mert = nn.Sequential(
+            nn.Linear(mert_dim, proj_dim),
+            nn.LayerNorm(proj_dim),
+            nn.ReLU(),
+        )
+        self.proj_w2v = nn.Sequential(
+            nn.Linear(w2v_dim, proj_dim),
+            nn.LayerNorm(proj_dim),
+            nn.ReLU(),
+        )
+
+        concat_dim = proj_dim * 2  # 512
+
+        self.head = nn.Sequential(
+            nn.Linear(concat_dim, 256),
+            nn.LayerNorm(256),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, bottleneck),
+            nn.LayerNorm(bottleneck),
+            nn.ReLU(),
+            nn.Dropout(dropout / 2),
+        )
+        self.regressor = nn.Linear(bottleneck, 2)
+
+    def forward(self, x_mert: torch.Tensor, x_w2v: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        fm = self.proj_mert(self.fusion_mert(x_mert))   # (B, proj_dim)
+        fw = self.proj_w2v(self.fusion_w2v(x_w2v))     # (B, proj_dim)
+        fused = torch.cat([fm, fw], dim=1)              # (B, proj_dim*2)
+        latent = self.head(fused)                       # (B, bottleneck)
+        latent_norm = F.normalize(latent, dim=1)
+        return self.regressor(latent_norm), latent_norm
+
+    def get_layer_weights(self) -> dict:
+        return {
+            "mert": self.fusion_mert.get_weights(),
+            "w2v":  self.fusion_w2v.get_weights(),
+        }
+
+
+# =============================================================================
+# 2d. Dual-SSL + Domain Conditioning (Simonetta joint-learning, SSL-native)
 # =============================================================================
 
 class DualSSLDomainModel(nn.Module):
@@ -416,10 +491,11 @@ def _analyze_weight_vector(weights: np.ndarray, name: str, save_path: str = None
     return result
 
 
-def analyze_dual_layer_weights(model: DualSSLModel, save_dir: str = ".") -> dict:
+def analyze_dual_layer_weights(model, save_dir: str = ".") -> dict:
     """
-    Analyzes the learned layer-fusion weights of BOTH encoders in a
-    DualSSLModel. Saves:
+    Analyzes the learned layer-fusion weights of BOTH encoders.
+    Accepts DualSSLModel, DualSSLBottleneckModel, or DualSSLDomainModel.
+    Saves:
       - layer_weights_mert.npy
       - layer_weights_w2v.npy
       - dual_layer_weights.png  (side-by-side bar plot)
@@ -433,6 +509,15 @@ def analyze_dual_layer_weights(model: DualSSLModel, save_dir: str = ".") -> dict
     res_w2v = _analyze_weight_vector(
         w["w2v"], "wav2vec2", os.path.join(save_dir, "layer_weights_w2v.npy")
     )
+
+    n_mert = len(w["mert"])
+    n_w2v  = len(w["w2v"])
+    spec_mert = 1.0 - res_mert["entropy"] / np.log(n_mert)
+    spec_w2v  = 1.0 - res_w2v["entropy"]  / np.log(n_w2v)
+    print(f"\n  Fusion entropy  — MERT: {res_mert['entropy']:.4f} | wav2vec2: {res_w2v['entropy']:.4f}"
+          f"  (max: ln({n_mert})={np.log(n_mert):.4f} / ln({n_w2v})={np.log(n_w2v):.4f})")
+    print(f"  Specialization  — MERT: {spec_mert*100:.1f}% | wav2vec2: {spec_w2v*100:.1f}%"
+          f"  (0%=uniform, 100%=one layer)")
 
     import matplotlib.pyplot as plt
 

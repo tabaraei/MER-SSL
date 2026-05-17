@@ -18,12 +18,13 @@ from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
 from models import (
     MERModel,
     DualSSLModel,
+    DualSSLBottleneckModel,
     DualSSLDomainModel,
     analyze_layer_weights,
     plot_layer_weights,
     analyze_dual_layer_weights,
 )
-from losses import HybridLoss, CCCLoss, SupCRLoss
+from losses import HybridLoss, CCCLoss, SupCRLoss, fusion_entropy_loss
 from data_utils import (
     load_pmemo_data,
     load_pmemo_with_eda,
@@ -47,7 +48,7 @@ def get_balanced_sampler(Y):
     sample_weights = torch.tensor([weights[q] for q in quads])
     return WeightedRandomSampler(sample_weights, len(sample_weights))
 
-def get_optimizer(model, use_eda, base_lr, use_dual=False, use_joint=False):
+def get_optimizer(model, use_eda, base_lr, use_dual=False, use_joint=False, use_bottleneck=False):
     """Provides a high LR for Fusion parameters and base LR for the head."""
     if use_joint:
         # DualSSLDomainModel: both fusions fast; head/regressor/domain_emb at base LR
@@ -57,6 +58,17 @@ def get_optimizer(model, use_eda, base_lr, use_dual=False, use_joint=False):
             {'params': model.head.parameters(),        'lr': base_lr},
             {'params': model.regressor.parameters(),   'lr': base_lr},
             {'params': model.domain_emb.parameters(),  'lr': base_lr},
+        ]
+        return torch.optim.Adam(params, weight_decay=1e-3)
+    if use_bottleneck:
+        # DualSSLBottleneckModel: fusions + per-encoder projections train fast
+        params = [
+            {'params': model.fusion_mert.parameters(), 'lr': 1e-2},
+            {'params': model.fusion_w2v.parameters(),  'lr': 1e-2},
+            {'params': model.proj_mert.parameters(),   'lr': 1e-2},
+            {'params': model.proj_w2v.parameters(),    'lr': 1e-2},
+            {'params': model.head.parameters(),        'lr': base_lr},
+            {'params': model.regressor.parameters(),   'lr': base_lr},
         ]
         return torch.optim.Adam(params, weight_decay=1e-3)
     if use_dual:
@@ -103,7 +115,7 @@ def build_loader(X_a, X_e, Y_t, use_eda, batch_size=32, use_sampler=False, use_d
 # Training & Evaluation Functions
 # =============================================================================
 
-def train_one_epoch(model, loader, optimizer, criterion, device, use_eda=False, use_dual=False):
+def train_one_epoch(model, loader, optimizer, criterion, device, use_eda=False, use_dual=False, beta=0.0):
     model.train()
     accum = {}
     for batch in loader:
@@ -114,8 +126,12 @@ def train_one_epoch(model, loader, optimizer, criterion, device, use_eda=False, 
         else:
             b_x, b_y = [t.to(device) for t in batch]
             preds, latent = model(b_x)
-            
+
         loss, components = criterion(preds, latent, b_y)
+        if beta > 0.0:
+            e_loss = fusion_entropy_loss(model) * beta
+            loss = loss + e_loss
+            components["loss_entropy"] = e_loss.item()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
@@ -320,9 +336,13 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--use_eda",  action="store_true")
     parser.add_argument("--eda_dir",  type=str, default="")
-    parser.add_argument("--encoder",  choices=["mert", "dual", "dual_joint"], default="mert",
-                        help="mert = MERT only (default, unchanged); dual = MERT + wav2vec2; "
+    parser.add_argument("--encoder",  choices=["mert", "dual", "dual_bottleneck", "dual_joint"], default="mert",
+                        help="mert = MERT only; dual = MERT+wav2vec2 (concat); "
+                             "dual_bottleneck = MERT+wav2vec2 with per-encoder compression (fixes fusion collapse); "
                              "dual_joint = dual + IADS-E joint learning (domain-conditioned)")
+    parser.add_argument("--beta", type=float, default=0.01,
+                        help="Entropy sharpening penalty weight. Penalizes uniform fusion weights. "
+                             "0 = disabled. Recommended range: 0.005–0.05.")
     parser.add_argument("--feat_path", type=str, default="pmemo_mert_all_layers.pt")
     parser.add_argument("--w2v_path",  type=str, default="pmemo_wav2vec_all_layers.pt")
     parser.add_argument("--csv_path", type=str, default="/datasets/emotions/PMEmo2019/annotations/static_annotations.csv")
@@ -338,12 +358,13 @@ if __name__ == "__main__":
     parser.add_argument("--eval_on", choices=["pmemo", "both"], default="pmemo")
     args = parser.parse_args()
 
-    use_dual  = (args.encoder == "dual")
+    use_bottleneck = (args.encoder == "dual_bottleneck")
+    use_dual  = (args.encoder in ("dual", "dual_bottleneck"))
     use_joint = (args.encoder == "dual_joint")
     if (use_dual or use_joint) and args.use_eda:
-        raise SystemExit("❌ --use_eda not yet supported with --encoder dual/dual_joint (tri-modal coming in a later iteration).")
+        raise SystemExit("❌ --use_eda not yet supported with --encoder dual/dual_bottleneck/dual_joint.")
 
-    print(f"\n🚀 MER Phase B | model={args.model} | mode={args.mode} | encoder={args.encoder}")
+    print(f"\n🚀 MER Phase B | model={args.model} | mode={args.mode} | encoder={args.encoder} | beta={args.beta}")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if use_joint:
@@ -366,6 +387,8 @@ if __name__ == "__main__":
     criterion = HybridLoss(w_mse=1.0, w_ccc=0.5, w_rank=0.3, w_supcr=0.1 if use_supcr else 0.0, use_supcr=use_supcr)
 
     def build_model():
+        if use_bottleneck:
+            return DualSSLBottleneckModel().to(device)
         if use_dual:
             return DualSSLModel().to(device)
         base = MERModel(mode=args.model).to(device)
@@ -385,7 +408,7 @@ if __name__ == "__main__":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 
         for epoch in range(args.epochs):
-            train_one_epoch(model, train_loader, optimizer, criterion, device, use_eda, use_dual)
+            train_one_epoch(model, train_loader, optimizer, criterion, device, use_eda, use_dual, beta=args.beta)
             scheduler.step()
 
         y_t, y_p, ccc = evaluate(model, test_loader, device, use_eda, use_dual)
@@ -405,12 +428,12 @@ if __name__ == "__main__":
             test_loader = build_loader(X_audio[te_idx], X_eda[te_idx] if (use_eda or use_dual) else None, Y[te_idx], use_eda, args.batch_size, False, use_dual)
 
             model = build_model()
-            # New Differential Optimizer for kfold mode to fix frozen weights
-            optimizer = get_optimizer(model, use_eda, args.lr, use_dual)
+            # Differential optimizer — fusions/projections at high LR, head at base LR
+            optimizer = get_optimizer(model, use_eda, args.lr, use_dual, use_bottleneck=use_bottleneck)
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 
             for _ in range(args.epochs):
-                train_one_epoch(model, train_loader, optimizer, criterion, device, use_eda, use_dual)
+                train_one_epoch(model, train_loader, optimizer, criterion, device, use_eda, use_dual, beta=args.beta)
                 scheduler.step()
 
             y_t, y_p, ccc = evaluate(model, test_loader, device, use_eda, use_dual)

@@ -2,10 +2,11 @@
 losses.py — Complete Loss Functions for MER Hybrid Model
 =========================================================
 Contains:
-  - SupCRLoss       : Supervised Contrastive Regression Loss (original)
-  - CCCLoss         : Concordance Correlation Coefficient Loss (NEW)
-  - RankLoss        : Differentiable Spearman-proxy Ranking Loss (NEW)
-  - HybridLoss      : Combined MSE + CCC + Rank + SupCR (NEW, drop-in for training)
+  - SupCRLoss          : Supervised Contrastive Regression Loss (original)
+  - CCCLoss            : Concordance Correlation Coefficient Loss
+  - RankLoss           : Differentiable Spearman-proxy Ranking Loss
+  - HybridLoss         : Combined MSE + CCC + Rank + SupCR (drop-in for training)
+  - fusion_entropy_loss: Entropy sharpening penalty for WeightedLayerFusion (NEW)
 """
 
 import torch
@@ -263,3 +264,34 @@ class HybridLoss(nn.Module):
             "loss_total": total.item(),
         }
         return total, components
+
+
+# =============================================================================
+# 5. Fusion entropy penalty — prevents WeightedLayerFusion collapse
+# =============================================================================
+
+def fusion_entropy_loss(model) -> torch.Tensor:
+    """
+    Returns the mean Shannon entropy of all WeightedLayerFusion weight
+    distributions in the model.
+
+    Adding this * beta to the training loss penalizes uniform layer weights.
+    Minimizing entropy drives each fusion toward a sharper, more selective
+    distribution (low entropy = high specialization).
+
+    Supports MERModel ('fusion'), DualSSLModel / DualSSLBottleneckModel
+    ('fusion_mert' + 'fusion_w2v'), and DualSSLDomainModel (same attrs).
+    """
+    entropies = []
+    if hasattr(model, 'fusion'):
+        w = F.softmax(model.fusion.layer_weights, dim=0)
+        entropies.append(-(w * torch.log(w + 1e-10)).sum())
+    if hasattr(model, 'fusion_mert'):
+        w = F.softmax(model.fusion_mert.layer_weights, dim=0)
+        entropies.append(-(w * torch.log(w + 1e-10)).sum())
+    if hasattr(model, 'fusion_w2v'):
+        w = F.softmax(model.fusion_w2v.layer_weights, dim=0)
+        entropies.append(-(w * torch.log(w + 1e-10)).sum())
+    if not entropies:
+        return torch.tensor(0.0)
+    return torch.stack(entropies).mean()
