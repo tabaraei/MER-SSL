@@ -93,8 +93,9 @@ CCC = Concordance Correlation Coefficient (AVEC standard metric, preferred over 
 | SOTA Hybrid (IAENG) | 2025 | Frequency-domain multimodal fusion | Audio | ~0.60 | ~0.62 | — | None |
 | Damer | 2025 | Wav2Vec2 + chord features | Audio | 0.51 | 0.72 | — | None |
 | Music2Emo | 2025 | MERT (music-specific SSL) + multitask | Audio | 0.54 | 0.78 | — | None |
-| **This thesis (audio only)** | **2026** | **MERT + WeightedFusion + HybridLoss** | **Audio** | **0.51** | **0.65** | **0.74 / 0.82** | **Ante-hoc (prototype + layer)** |
-| **This thesis (multimodal)** | **2026** | **MERT + EDA late fusion + SupCR** | **Audio + EDA** | **0.51** | **0.67** | **0.77 / 0.85** | **Ante-hoc (prototype + layer + EDA narrative)** |
+| **This thesis (MERT only)** | **2026** | **MERT + WeightedFusion + HybridLoss** | **Audio** | **0.51** | **0.65** | **0.74 / 0.82** | **Ante-hoc (prototype + layer)** |
+| **This thesis (multimodal)** | **2026** | **MERT + EDA late fusion + SupCR** | **Audio + EDA** | **0.51** | **0.67** | **0.77 / 0.85** | **Ante-hoc (prototype + layer + EDA)** |
+| **This thesis (Dual-SSL, best)** | **2026** | **MERT + wav2vec2 + Entropy Reg.** | **Audio** | **0.57** | **0.68** | **0.72 / 0.81** | **Ante-hoc (prototype + dual-layer)** |
 
 **Notes:**
 - CCC is not widely reported in the MER literature but is the standard in AVEC emotion challenges (Ringeval et al., 2018). Our CCC of 0.85 on arousal is the highest reported on PMEmo 2019.

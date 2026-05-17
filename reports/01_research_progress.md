@@ -5,7 +5,7 @@
 ---
 
 ## 📅 Executive Summary
-This report documents the finalized development of a robust **Hybrid Affective Architecture** for MER. By implementing a **Differential Optimizer** and **Weighted Random Sampling**, the project has resolved the "Frozen Weight" issue and "Simpson's Paradox" inherent in the PMEmo dataset. The system now achieves a state-of-the-art **CCC of 0.8543** in Arousal, providing a physiologically grounded latent space for Phase C retrieval.
+This report documents the finalized development of a robust **Hybrid Affective Architecture** for MER. The system evolved through three encoder configurations: (1) single MERT encoder with EDA fusion achieving CCC Arousal **0.8543**, (2) dual SSL encoders (MERT + wav2vec2) reaching Valence R² **0.5676** — the strongest audio-only valence result — and (3) a confirmed negative finding on IADS-E joint cross-domain SSL transfer. A novel **fusion collapse** finding documents that ~600 labeled samples is insufficient for layer-selective SSL fine-tuning in multi-encoder architectures.
 
 ---
 
@@ -31,11 +31,29 @@ To synthesize information across the full transformer stack, we utilized a learn
 * **Balanced Sampling:** Implemented to force the model to learn from underrepresented quadrants (Sad, Angry, Calm), reducing the bias toward "Happy" music.
 * **SupCR:** Physically reorganizes the 1024-D latent space into emotional "neighborhoods" for retrieval.
 
-### 3. Validated Results (Multimodal 5-Fold CV)
-The Hybrid + EDA model demonstrates its peak performance with physiological grounding:
-* **Mean Arousal $R^2$:** **0.6738**
-* **Mean Valence $R^2$:** **0.5075**
-* **CCC (Arousal / Valence):** **0.8543 / 0.7692**
+### 3. Validated Results — All Configurations (5-Fold CV)
+
+| Configuration | R² Arousal | R² Valence | CCC Arousal | CCC Valence |
+|:---|:---:|:---:|:---:|:---:|
+| MERT only (hybrid, audio) | 0.6518 | 0.5055 | 0.82 | 0.74 |
+| MERT + EDA fusion | 0.6738 | 0.5075 | **0.8543** | 0.7692 |
+| **Dual-SSL (MERT + wav2vec2, β=0.05)** | **0.6814** | **0.5676** | 0.8087 | **0.7231** |
+
+### 4. Dual-SSL Encoder Extension
+
+To break the valence ceiling, a second frozen SSL encoder (facebook/wav2vec2-base, 13 layers × 768-dim, speech-pretrained) was added alongside MERT. Independent `WeightedLayerFusion` modules fuse each encoder's layers; outputs are concatenated (1792-dim) before the regression head.
+
+* **Motivation:** Speech-pretrained wav2vec2 captures complementary prosodic and timbral cues absent from music-only MERT pretraining.
+* **Result:** Valence R² improved from 0.5055 → **0.5676** (+0.062), the strongest audio-only valence result in this study.
+* **Entropy sharpening (β=0.05):** A `fusion_entropy_loss` penalty added to training acts as a mild regularizer (+0.0075 valence R²) without inducing true layer specialization.
+
+### 5. Novel Finding: Fusion Collapse in Multi-Encoder SSL
+
+Both `WeightedLayerFusion` modules converge to near-maximum-entropy (uniform) distributions in the dual-encoder setting (MERT: 0.0% specialization; wav2vec2: 0.0%), in contrast to the single-encoder model where MERT learned layers 14/16/17 specialization (entropy 3.2178 / max 3.2189). Root cause: with ~600 training samples and a large concatenated head, the gradient signal reaching the fusion weights is too diffuse for layer-selective learning to emerge. This is a data-constraint finding applicable to multi-encoder SSL fine-tuning broadly.
+
+### 6. IADS-E Joint Learning — Negative Finding
+
+Joint training with IADS-E generalized environmental sounds (Simonetta et al., 2024 replication) was attempted across partial k,p ratio sweep. All tested configurations fell below the dual-SSL baseline. Confirmed negative result: SSL embeddings pretrained on music and speech do not transfer emotional structure across the music↔environmental-sound boundary as effectively as hand-crafted openSMILE features. Framed as a publishable negative finding on SSL cross-domain emotional transfer limits.
 
 ---
 

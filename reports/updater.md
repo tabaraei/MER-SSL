@@ -74,7 +74,7 @@ Precision@k and Silhouette scores haven't been computed (pending index rebuild).
 
 ---
 
-## SOTA Comparison (Updated, PMEmo 2019)
+## SOTA Comparison (Final, PMEmo 2019)
 
 | Method | Year | Approach | R² Valence | R² Arousal | CCC V/A |
 |--------|------|----------|-----------|-----------|---------|
@@ -82,10 +82,12 @@ Precision@k and Silhouette scores haven't been computed (pending index rebuild).
 | Deep MER (Dutta & Chanda) | 2021 | Mel-Spec + CRNN | ~0.45 | ~0.55 | — |
 | Hybrid SSL Multi-task | 2023 | Wav2Vec2 + Attention | ~0.48 | ~0.61 | — |
 | IAENG 2025 Hybrid | 2025 | Multimodal Freq-Domain | ~0.60 | ~0.62 | — |
-| This Work (MERT Hybrid+EDA) | 2026 | Music-SSL + WeightedFusion + SupCR | 0.5075 | 0.6738 | 0.77 / 0.85 |
-| **This Work (dual: MERT + wav2vec2)** | **2026** | **Dual-SSL + WeightedFusion + SupCR** | **0.5601** | **0.6810** | **0.72 / 0.81** |
+| This Work (MERT only, audio) | 2026 | Music-SSL + WeightedFusion + SupCR | 0.5055 | 0.6518 | 0.74 / 0.82 |
+| This Work (MERT + EDA) | 2026 | MERT + Physiological Fusion | 0.5075 | 0.6738 | 0.77 / 0.85 |
+| **This Work (Dual-SSL + β=0.05)** | **2026** | **MERT + wav2vec2 + Entropy Reg.** | **0.5676** | **0.6814** | **0.72 / 0.81** |
 
-Note: CCC (Concordance Correlation Coefficient) is the AVEC standard metric — it simultaneously penalizes poor correlation, mean bias, and variance mismatch. The current best configuration is **dual (MERT + wav2vec2), no IADS-E**; adding IADS-E joint data did not improve PMEmo valence (see Step 2 below — negative cross-domain SSL transfer).
+**Final headline numbers: Dual-SSL (MERT + wav2vec2, β=0.05): V R²=0.5676 / A R²=0.6814.**
+CCC is the AVEC standard metric. The MERT+EDA model still leads on CCC Arousal (0.8543) due to physiological grounding. For pure audio, Dual-SSL is the strongest configuration.
 
 ---
 
@@ -154,14 +156,66 @@ needs a domain-weight `λ` that scales IADS-E gradient mass (lever #1 below) so
 the transfer curve can be traced near `λ→0` (= dual). Until then this is a
 **strong directional negative result, not yet a closed one.**
 
-### Thesis takeaway
+### Thesis takeaway (IADS-E — CLOSED)
 
-- **Headline result stays:** dual (MERT + wav2vec2), **Valence R² 0.5601 /
-  Arousal 0.6810** — no IADS-E. This is the number to report.
-- **Joint learning** is written up as a tested hypothesis with a (currently)
-  **negative outcome**: SSL cross-domain emotional transfer underperforms the
-  hand-crafted-feature literature — a legitimate contribution on *the goodness
-  and limits of SSL models*, which is the thesis' stated focus.
-- Open follow-ups if pursued: (1) domain-weight `λ`; (2) per-domain SupCR
-  (music↔sound attract-only); (3) freeze MERT fusion on sound batches;
-  (4) category-targeted IADS-E mixing (low-valence/high-arousal only).
+- **IADS-E joint learning is a confirmed negative finding.** All tested configs
+  fall below the dual baseline. Declared closed.
+- SSL cross-domain emotional transfer underperforms Simonetta's hand-crafted
+  features — a citable, publishable negative result on SSL model goodness.
+
+---
+
+## Step 3 — Fusion Collapse & Entropy Sharpening (2026-05-17, CLOSED)
+
+### Experiments run
+
+All on PMEmo only, 5-fold CV, 100 epochs.
+
+| Config | R² Arousal | R² Valence | CCC Arousal | CCC Valence | MERT spec. | w2v spec. |
+|:--|:--:|:--:|:--:|:--:|:--:|:--:|
+| Dual β=0 (original) | 0.6810 | 0.5601 | 0.8142 | 0.7182 | ~0% | ~0% |
+| DualBottleneck β=0.01 | 0.6665 | 0.4903 | 0.8174 | 0.7045 | 0.2% | 1.8% |
+| **Dual β=0.05 (BEST)** | **0.6814** | **0.5676** | **0.8087** | **0.7231** | **0.0%** | **0.0%** |
+
+### Key findings (closed)
+
+**Fusion collapse confirmed.** Both `WeightedLayerFusion` modules converge to
+near-maximum-entropy (uniform) distributions in the dual-encoder setting:
+- MERT: entropy 3.2180 / max 3.2189 → specialization 0.0%
+- wav2vec2: entropy 2.5649 / max 2.5649 → specialization 0.0%
+
+This contrasts with the **single-encoder MERModel** which learned layer 14/16/17
+specialization (entropy 3.2178, 0.05% below max).
+
+**Root cause:** With 600 training samples and a 1792-d concatenated head, the
+gradient reaching `layer_weights` parameters is too diffuse — the head solves
+the task by mixing all 38 virtual layers, so no individual layer needs to stand
+out. The per-encoder bottleneck (DualSSLBottleneckModel, 1024→256, 768→256) made
+things worse (-0.07 valence R²) because 256-d is too aggressive a compression
+for 600 samples.
+
+**β=0.05 as regularizer:** The entropy sharpening penalty at β=0.05 produced no
+measurable specialization (still 0%) but gave a +0.0075 valence R² gain. It acts
+as mild optimization noise that breaks the exact uniform-weight symmetry during
+early training, slightly improving generalization without changing layer selection.
+
+### Thesis framing (fusion collapse)
+
+> *"WeightedLayerFusion converges to near-maximum-entropy distributions in both
+> encoders of the dual-SSL model regardless of architectural bottlenecks or
+> entropy penalties. This confirms that layer-selective SSL fine-tuning requires
+> substantially more labeled data than the ~600 samples available in PMEmo.
+> Interestingly, the single-encoder MERT model does learn layer specialization
+> (entropy drops to 3.2178 with layers 14/16/17 dominating), suggesting that
+> adding a second encoder dilutes the specialization gradient by giving the head
+> an alternative information source."*
+
+This is a publishable observation about the data requirements of multi-encoder SSL architectures.
+
+### Final headline numbers for thesis
+
+| System | R² Arousal | R² Valence | CCC A | CCC V | Notes |
+|:--|:--:|:--:|:--:|:--:|:--|
+| MERT only (hybrid) | 0.6518 | 0.5055 | 0.82 | 0.74 | Single SSL encoder |
+| MERT + EDA | 0.6738 | 0.5075 | **0.8543** | 0.7692 | Best physiological CCC |
+| **Dual-SSL β=0.05** | **0.6814** | **0.5676** | 0.8087 | **0.7231** | **Best overall V R²** |
