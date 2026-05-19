@@ -109,9 +109,11 @@ EDA features (7 → 32)  ──┘
 | :--- | :---: | :---: | :---: | :---: |
 | MERT only (Audio) | 0.6518 | 0.5055 | 0.82 | 0.74 |
 | MERT + EDA Fusion | 0.6738 | 0.5075 | **0.8543** | 0.7692 |
-| **Dual-SSL (MERT + wav2vec2, β=0.05)** | **0.6814** | **0.5676** | 0.8087 | **0.7231** |
+| Dual-SSL (MERT + wav2vec2, β=0.05) | 0.6814 | 0.5676 | 0.8087 | 0.7231 |
+| **Triple (MERT + wav2vec2 + mel-CNN)** | **0.7023** | **0.5758** | 0.8233 | 0.7329 |
+| Spec-only (MERT + mel-CNN, no w2v) | 0.7069 | 0.5709 | 0.8271 | 0.7314 |
 
-The **Dual-SSL** model is the strongest audio-only configuration. The **MERT + EDA** model leads on CCC Arousal due to physiological grounding.
+The **Triple** model (frozen MERT + frozen wav2vec2 + a shallow *trainable* mel-spectrogram CNN) is the strongest configuration — first past Arousal R² 0.70. **Key finding:** Spec-only (MERT + mel-CNN, no wav2vec2) is statistically equal to Triple → a 109K-param from-scratch CNN fully substitutes for the 95M-param frozen wav2vec2. ⚠️ **Caveat:** the global R² is majority-class (HVHA 61%) driven; per-quadrant R² is negative on the three minority quadrants across all configs — additional encoders do not resolve the PMEmo class-imbalance ceiling.
 
 ### SOTA Comparison (PMEmo 2019, Final)
 
@@ -120,8 +122,9 @@ The **Dual-SSL** model is the strongest audio-only configuration. The **MERT + E
 | PMEmo Original (hand-crafted) | 2019 | 0.420 | 0.510 | — |
 | Damer — Wav2Vec2 + Chords | 2025 | 0.510 | 0.720 | — |
 | Music2Emo — MERT + Multitask | 2025 | 0.540 | 0.780 | — |
-| **This Thesis — MERT + EDA** | **2026** | **0.508** | **0.674** | **0.77 / 0.85** |
-| **This Thesis — Dual-SSL (best audio)** | **2026** | **0.568** | **0.681** | **0.72 / 0.81** |
+| This Thesis — MERT + EDA | 2026 | 0.508 | 0.674 | 0.77 / 0.85 |
+| This Thesis — Dual-SSL | 2026 | 0.568 | 0.681 | 0.72 / 0.81 |
+| **This Thesis — Triple (best)** | **2026** | **0.576** | **0.702** | **0.73 / 0.82** |
 
 **Note on CCC vs R²:** CCC simultaneously penalizes poor correlation, mean shift, and variance mismatch (AVEC standard). CCC Arousal **0.8543** (MERT+EDA) is the highest reported on PMEmo 2019.
 
@@ -129,6 +132,7 @@ The **Dual-SSL** model is the strongest audio-only configuration. The **MERT + E
 
 - **Single-encoder MERT:** layers 14, 16, 17 dominate. Weight entropy = **3.2178** (0.05% below theoretical max). Mid-to-late layers encode harmonic/melodic abstractions — consistent with probing literature (Pasad et al., 2021).
 - **Dual-encoder (MERT + wav2vec2):** both fusion modules stay at maximum entropy (near-uniform weights). This is the **fusion collapse** finding: with ~600 labeled samples, the larger concatenated head solves the task without requiring per-encoder layer selection. The single-encoder specialization is an advantage of the simpler architecture.
+- **Triple-branch convergence:** Adding a trainable mel-CNN makes wav2vec2 statistically redundant (Spec-only ≈ Triple). Combined with fusion collapse and the IADS-E negative result, this is a consistent three-way finding: **wav2vec2's speech-pretraining contributes no music-relevant structure**; the gains come from MERT + a learnable spectral branch.
 
 ---
 
@@ -289,9 +293,12 @@ These are acknowledged in the thesis reports and should be framed as evidence of
 | **B** | Differential optimizer (1e-2 / 1e-4) | Solves "frozen fusion weight" problem in weighted-layer SSL fine-tuning |
 | **B** | Balanced sampler for emotion quadrant imbalance | Resolves Simpson's Paradox in PMEmo quadrant-level analysis |
 | **B** | Multimodal EDA fusion with late-fusion head | Physiological grounding; CCC Arousal 0.8543 — highest on PMEmo 2019 |
-| **B** | Dual-SSL (MERT + wav2vec2) with entropy sharpening | Valence R² 0.5676 — best audio-only result, surpasses Music2Emo |
+| **B** | Dual-SSL (MERT + wav2vec2) with entropy sharpening | Valence R² 0.5676 audio-only |
+| **B** | Triple-branch (MERT + wav2vec2 + trainable mel-CNN) | Best result: Arousal R² 0.7023, Valence R² 0.5758 |
+| **B** | wav2vec2-redundancy finding (Spec-only ≈ Triple) | Small from-scratch CNN substitutes for 95M-param frozen wav2vec2 |
 | **B** | Fusion collapse finding | Data-constraint result: ~600 samples insufficient for multi-encoder layer selection |
 | **B** | IADS-E joint learning — negative finding | SSL cross-domain emotional transfer underperforms hand-crafted features |
+| **B** | Class-imbalance ceiling characterization | Global R² is HVHA-majority-driven; minority-quadrant R² negative across all configs |
 | **C** | Contrastive foil retrieval for XAI | First application of Miller (2019) contrastive XAI to music retrieval |
 | **C** | EDA-augmented explanation narrative | First physiologically-grounded explanation in music recommendation |
 | **C** | Two-layer explanation system | Separates scientific rigour (template) from usability (LLM) |
@@ -308,9 +315,12 @@ These are acknowledged in the thesis reports and should be framed as evidence of
 - [x] Phase A: harmonic mode probe (100%), tempo probe (R²=0.12), t-SNE visualization
 - [x] Phase B: MERT-only hybrid model — CCC Arousal 0.8543, Valence R² 0.5055
 - [x] Phase B: EDA multimodal fusion — CCC Arousal 0.8543 (best on PMEmo 2019)
-- [x] Phase B: Dual-SSL (MERT + wav2vec2) — Valence R² 0.5676 (best audio-only)
+- [x] Phase B: Dual-SSL (MERT + wav2vec2) — Valence R² 0.5676
 - [x] Phase B: Entropy sharpening penalty (β=0.05) — acts as regularizer
+- [x] Phase B: Triple-branch (+ trainable mel-CNN) — best: Arousal R² 0.7023 / Valence R² 0.5758
+- [x] Phase B: wav2vec2-redundancy finding — Spec-only (MERT+mel) ≈ Triple
 - [x] Phase B: IADS-E joint learning — confirmed negative finding (all configs < dual baseline)
+- [ ] Phase B: train-loss logging for triple-branch — quantify CNN overfitting (open action)
 - [x] Phase B: Fusion collapse finding documented — data-constraint on layer selection
 - [x] Phase C: modular retrieval pipeline (6 modules)
 - [x] Phase C: contrastive foils, EDA narrative, layer attribution, mood trajectory

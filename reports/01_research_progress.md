@@ -37,7 +37,11 @@ To synthesize information across the full transformer stack, we utilized a learn
 |:---|:---:|:---:|:---:|:---:|
 | MERT only (hybrid, audio) | 0.6518 | 0.5055 | 0.82 | 0.74 |
 | MERT + EDA fusion | 0.6738 | 0.5075 | **0.8543** | 0.7692 |
-| **Dual-SSL (MERT + wav2vec2, β=0.05)** | **0.6814** | **0.5676** | 0.8087 | **0.7231** |
+| Dual-SSL (MERT + wav2vec2, β=0.05) | 0.6814 | 0.5676 | 0.8087 | 0.7231 |
+| **Triple (MERT + wav2vec2 + mel-CNN)** | **0.7023** | **0.5758** | 0.8233 | 0.7329 |
+| Spec-only (MERT + mel-CNN, no w2v) | 0.7069 | 0.5709 | 0.8271 | 0.7314 |
+
+> ⚠️ Global R² is majority-class (HVHA, 61%) driven; minority-quadrant R² is negative across all configs (PMEmo class-imbalance limitation — see §7).
 
 ### 4. Dual-SSL Encoder Extension
 
@@ -54,6 +58,14 @@ Both `WeightedLayerFusion` modules converge to near-maximum-entropy (uniform) di
 ### 6. IADS-E Joint Learning — Negative Finding
 
 Joint training with IADS-E generalized environmental sounds (Simonetta et al., 2024 replication) was attempted across partial k,p ratio sweep. All tested configurations fell below the dual-SSL baseline. Confirmed negative result: SSL embeddings pretrained on music and speech do not transfer emotional structure across the music↔environmental-sound boundary as effectively as hand-crafted openSMILE features. Framed as a publishable negative finding on SSL cross-domain emotional transfer limits.
+
+### 7. Triple-Branch (+ trainable mel-CNN) — Best Result, with Caveat
+
+A third branch — a shallow trainable mel-spectrogram CNN (~109K params, on a pre-extracted center-30 s log-mel spectrogram) — was added alongside frozen MERT and wav2vec2.
+
+* **New best:** Triple reaches A R² = **0.7023**, V R² = **0.5758** — first configuration past 0.70 arousal.
+* **wav2vec2 redundancy (key finding):** The Spec-only ablation (MERT + mel-CNN, *no wav2vec2*) achieves A R² 0.7069 / V R² 0.5709 — statistically equal to Triple (deltas inside the ±0.013–0.042 fold std). A small from-scratch CNN fully substitutes for the 95M-param frozen wav2vec2, reinforcing the fusion-collapse and IADS-E negative findings.
+* **⚠️ Class-imbalance caveat:** The global R² gain is concentrated in the majority HVHA quadrant (61% of data). Per-quadrant R² is negative for the three minority quadrants across all configurations — additional encoders raise the majority-driven global metric but do not resolve the PMEmo class-imbalance ceiling. The CNN train/test gap is not yet directly instrumented (open verification action).
 
 ---
 

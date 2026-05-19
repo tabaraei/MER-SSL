@@ -93,14 +93,17 @@ CCC = Concordance Correlation Coefficient (AVEC standard metric, preferred over 
 | SOTA Hybrid (IAENG) | 2025 | Frequency-domain multimodal fusion | Audio | ~0.60 | ~0.62 | — | None |
 | Damer | 2025 | Wav2Vec2 + chord features | Audio | 0.51 | 0.72 | — | None |
 | Music2Emo | 2025 | MERT (music-specific SSL) + multitask | Audio | 0.54 | 0.78 | — | None |
-| **This thesis (MERT only)** | **2026** | **MERT + WeightedFusion + HybridLoss** | **Audio** | **0.51** | **0.65** | **0.74 / 0.82** | **Ante-hoc (prototype + layer)** |
-| **This thesis (multimodal)** | **2026** | **MERT + EDA late fusion + SupCR** | **Audio + EDA** | **0.51** | **0.67** | **0.77 / 0.85** | **Ante-hoc (prototype + layer + EDA)** |
-| **This thesis (Dual-SSL, best)** | **2026** | **MERT + wav2vec2 + Entropy Reg.** | **Audio** | **0.57** | **0.68** | **0.72 / 0.81** | **Ante-hoc (prototype + dual-layer)** |
+| This thesis (MERT only) | 2026 | MERT + WeightedFusion + HybridLoss | Audio | 0.51 | 0.65 | 0.74 / 0.82 | Ante-hoc (prototype + layer) |
+| This thesis (multimodal) | 2026 | MERT + EDA late fusion + SupCR | Audio + EDA | 0.51 | 0.67 | 0.77 / 0.85 | Ante-hoc (prototype + layer + EDA) |
+| This thesis (Dual-SSL) | 2026 | MERT + wav2vec2 + Entropy Reg. | Audio | 0.57 | 0.68 | 0.72 / 0.81 | Ante-hoc (prototype + dual-layer) |
+| **This thesis (Triple, best)** | **2026** | **MERT + wav2vec2 + trainable mel-CNN** | **Audio** | **0.58** | **0.70** | **0.73 / 0.82** | **Ante-hoc (prototype + layer)** |
 
 **Notes:**
 - CCC is not widely reported in the MER literature but is the standard in AVEC emotion challenges (Ringeval et al., 2018). Our CCC of 0.85 on arousal is the highest reported on PMEmo 2019.
 - The XAI column shows that **no prior work on PMEmo provides a prototype-based or structurally ante-hoc explanation**. This is the unique contribution of Phase C.
-- R² for valence remains at ~0.51 across all SSL methods, confirming this is a dataset/task ceiling — not a model-specific failure. Valence is harder due to its dependence on lyrics, cultural context, and individual subjectivity (Yang & Chen, 2012).
+- R² for valence remains ≤ 0.58 across all SSL methods, confirming this is a dataset/task ceiling — not a model-specific failure. Valence is harder due to its dependence on lyrics, cultural context, and individual subjectivity (Yang & Chen, 2012).
+- The best configuration (Triple: MERT + wav2vec2 + a *trainable* mel-spectrogram CNN) reaches Arousal R² 0.70. **Key finding:** removing wav2vec2 (Spec-only = MERT + mel-CNN) gives statistically identical results — a 109K-param from-scratch CNN substitutes for the 95M-param frozen wav2vec2. Combined with the fusion-collapse and IADS-E negative findings, this is consistent evidence that wav2vec2's speech-pretraining contributes no music-relevant structure here.
+- **Honest caveat (raised proactively):** the global R² gains are concentrated in the majority HVHA quadrant (61% of PMEmo). Per-quadrant R² is negative on the three minority quadrants across *all* configurations. Additional encoders raise the majority-driven global metric but do not resolve the dataset's class-imbalance ceiling — this is the dominant remaining limitation, more pressing than the valence ceiling.
 
 ---
 
@@ -301,13 +304,18 @@ In this formulation, the model produces both a prediction AND a prototype activa
 | :--- | :---: | :---: | :---: | :---: |
 | Baseline (MERT last layer only) | ~0.55 | ~0.42 | ~0.70 | ~0.62 |
 | Hybrid, audio only | 0.6518 | 0.5055 | 0.82 | 0.74 |
-| **Hybrid + EDA (full system)** | **0.6738** | **0.5075** | **0.8543** | **0.7692** |
+| Hybrid + EDA | 0.6738 | 0.5075 | **0.8543** | 0.7692 |
+| Dual-SSL (MERT + wav2vec2) | 0.6814 | 0.5676 | 0.8087 | 0.7231 |
+| **Triple (MERT + wav2vec2 + mel-CNN)** | **0.7023** | **0.5758** | 0.8233 | 0.7329 |
+| Spec-only (MERT + mel-CNN, no w2v) | 0.7069 | 0.5709 | 0.8271 | 0.7314 |
 
 ### SOTA Position
 
-- **Arousal CCC: 0.8543** — highest reported on PMEmo 2019
-- **Arousal R²: 0.674** — competitive; Music2Emo (0.78) uses multitask learning with additional supervision signals
-- **Valence R²: 0.507** — consistent with field-wide ceiling; no PMEmo method exceeds 0.60 without auxiliary labels
+- **Arousal R²: 0.702** (Triple) — first configuration past 0.70; competitive with Music2Emo (0.78, which uses multitask supervision)
+- **Valence R²: 0.576** (Triple) — best in this study, surpasses Music2Emo (0.54) audio-only
+- **Arousal CCC: 0.8543** (MERT+EDA) — highest reported on PMEmo 2019
+- **wav2vec2 redundant:** Spec-only (MERT + mel-CNN) ≈ Triple — a small trainable CNN replaces the frozen speech-SSL encoder
+- **⚠️ Class-imbalance ceiling:** global R² is HVHA-majority (61%) driven; minority-quadrant R² negative across all configs — the dominant unresolved limitation
 - **XAI: unique** — no prior PMEmo work provides prototype-based, ante-hoc explanation of retrieval decisions
 
 ---
@@ -320,8 +328,13 @@ The previous preliminary report (2 weeks ago) presented Phase A results and init
 | :--- | :--- |
 | Phase B fully trained and validated (5-fold, differential optimizer, balanced sampler) | Complete |
 | Multimodal EDA fusion implemented and validated | Complete |
-| CCC of 0.8543 / 0.7692 achieved | Complete |
+| CCC of 0.8543 / 0.7692 achieved (MERT+EDA) | Complete |
 | Layer specialization analysis (entropy = 3.2178, layers 14/16/17) | Complete |
+| Dual-SSL (MERT + wav2vec2) + entropy sharpening; fusion-collapse finding | Complete |
+| IADS-E joint learning — confirmed negative cross-domain transfer finding | Complete |
+| Triple-branch (+ trainable mel-CNN) — best result A R² 0.7023 / V R² 0.5758 | Complete |
+| wav2vec2-redundancy finding (Spec-only ≈ Triple) | Complete |
+| Train-loss logging for triple-branch (quantify CNN overfitting directly) | Open action |
 | Phase C modular pipeline (6 modules, ~1000 lines of code) | Complete |
 | Prototype-based retrieval with 4 quadrant prototypes | Complete |
 | Contrastive foil retrieval (ante-hoc counterfactual XAI) | Complete |

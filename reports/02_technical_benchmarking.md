@@ -10,18 +10,21 @@ The following table compares all validated 5-fold averages against recent SOTA b
 | Hybrid SSL (Wu et al.) | 2023 | Wav2Vec2 + Attention | ~0.480 | ~0.610 | — |
 | Damer (SSL) | 2025 | Wav2Vec2 + Chords | 0.510 | 0.720 | — |
 | Music2Emo | 2025 | MERT + Multitask | 0.540 | 0.780 | — |
-| **This Work — MERT only** | **2026** | **Music-SSL + WeightedFusion + HybridLoss** | **0.5055** | **0.6518** | **0.74 / 0.82** |
-| **This Work — MERT + EDA** | **2026** | **MERT + Physiological Late Fusion** | **0.5075** | **0.6738** | **0.77 / 0.85** |
-| **This Work — Dual-SSL (best)** | **2026** | **MERT + wav2vec2 + Entropy Reg. (β=0.05)** | **0.5676** | **0.6814** | **0.72 / 0.81** |
+| This Work — MERT only | 2026 | Music-SSL + WeightedFusion + HybridLoss | 0.5055 | 0.6518 | 0.74 / 0.82 |
+| This Work — MERT + EDA | 2026 | MERT + Physiological Late Fusion | 0.5075 | 0.6738 | 0.77 / 0.85 |
+| This Work — Dual-SSL (β=0.05) | 2026 | MERT + wav2vec2 + Entropy Reg. | 0.5676 | 0.6814 | 0.72 / 0.81 |
+| **This Work — Triple (+mel-CNN)** | **2026** | **MERT + wav2vec2 + trainable mel-CNN** | **0.5758** | **0.7023** | **0.73 / 0.82** |
+| This Work — Spec-only (MERT+mel) | 2026 | MERT + trainable mel-CNN (no wav2vec2) | 0.5709 | 0.7069 | 0.73 / 0.83 |
 
 ### Key Observations
-* **Valence breakthrough:** Dual-SSL achieves R² = **0.5676**, surpassing Music2Emo (0.540) on valence without multitask learning or auxiliary labels — using only audio.
-* **Arousal CCC:** The MERT+EDA system achieves CCC = **0.8543**, the highest reported on PMEmo 2019. The dual-SSL system achieves 0.8087 without physiological signals.
-* **Valence ceiling confirmed:** No audio-only method on PMEmo exceeds R² ≈ 0.57, consistent with the field-wide finding that valence requires lyrics/cultural context (Yang & Chen, 2012).
+* **New best — Arousal R² past 0.70:** The Triple model (MERT + wav2vec2 + trainable mel-spectrogram CNN) reaches A R² = **0.7023**, V R² = **0.5758** — the strongest configuration, surpassing Music2Emo (0.540) on valence using only audio.
+* **wav2vec2 is statistically redundant:** Spec-only (MERT + mel-CNN, *no wav2vec2*) achieves A R² 0.7069 / V R² 0.5709 — equal to or better than Triple, deltas inside the ±0.013–0.042 fold std. A 109K-param from-scratch CNN fully substitutes for the 95M-param frozen wav2vec2. This reinforces the fusion-collapse and IADS-E negative findings: wav2vec2's speech-pretraining carries no music-relevant complementary structure.
+* **⚠️ Global R² is majority-class-driven (critical caveat):** The 0.70 figure is inflated by the HVHA (Happy) quadrant (469/767 = 61%). Per-quadrant R² is **negative** for the three minority quadrants across *all* configurations (see §5). The headline gain reflects better majority-class fit, not improved V-A-plane generalization. Train-loss logging is not yet instrumented, so the CNN train/test gap is not directly measured — flagged as an open verification action.
+* **Valence ceiling confirmed:** No audio-only method on PMEmo exceeds R² ≈ 0.58, consistent with valence requiring lyrics/cultural context (Yang & Chen, 2012).
 
 ---
 
-## 2. Phase B Architecture — Three Configurations
+## 2. Phase B Architecture — Encoder Configurations
 
 ### 2.1 Single-Encoder MERT (baseline)
 ```
@@ -44,6 +47,33 @@ wav2vec2 (13L × 768)→  WeightedLayerFusion  →   768-dim ─┘
                       →  Regressor: 128 → 2
 ```
 wav2vec2-base (facebook) is speech-pretrained: 13 transformer layers (768-dim, 16kHz). Captures prosodic and timbral cues complementary to MERT's music-specific representations. Entropy sharpening penalty (β=0.05) applied during training. **Result: V R²=0.5676, A R²=0.6814.**
+
+### 2.4 Triple-Branch (MERT + wav2vec2 + trainable mel-CNN) — Best Configuration
+```
+MERT (25L×1024)     →  WeightedLayerFusion  →  1024-d ─┐
+wav2vec2 (13L×768)  →  WeightedLayerFusion  →   768-d ─┤── cat → 1920-d
+mel-spec (128×1407) →  trainable CNN (109K)  →   128-d ─┘   → Head 1920→256→128 → 2
+```
+A shallow trainable CNN (3 conv blocks + AdaptiveAvgPool, ~109K params) over a pre-extracted center-30 s log-mel spectrogram (parameter-free transform → reuses the `.pt` pipeline; CNN is the only trainable encoder). Differential optimizer: SSL fusion lr=1e-2, CNN+head lr=1e-4. **Result: V R²=0.5758, A R²=0.7023 — best overall.**
+
+**Ablation — Spec-only (MERT + mel-CNN, no wav2vec2):** V R²=0.5709, A R²=0.7069. Statistically equal to Triple → **wav2vec2 contributes nothing once the mel-CNN is present.** The mel-CNN is the source of the gain over Dual-SSL; wav2vec2 is redundant.
+
+---
+
+## 2b. ⚠️ Overfitting & Class-Imbalance Caveat (Triple/Spec-only)
+
+The Triple and Spec-only headline R² (≈0.70) must **not** be reported as a clean win. Per-quadrant R² (Spec-only, all folds combined):
+
+| Quadrant | n | R² Arousal | R² Valence |
+|:--|:--:|:--:|:--:|
+| HVHA (Happy) | 469 (61%) | 0.230 | −0.142 |
+| HVLA (Calm) | 67 | −0.540 | −2.148 |
+| LVHA (Angry) | 64 | −1.079 | −1.178 |
+| LVLA (Sad) | 167 | −0.138 | −0.955 |
+
+Three of four quadrants have **negative R²** (worse than predicting the mean). The global metric is high only because HVHA dominates (Simpson's Paradox). The triple-branch improvement is concentrated in the majority class — it does **not** improve, and on some minority quadrants slightly worsens, V-A-plane generalization vs. prior configs.
+
+**Verification status:** `mainB_triple.py` does not yet log train loss, so the CNN train/test gap is not directly measured. Modest fold variance (±0.013 A) argues against catastrophic CNN overfitting, but a direct measurement is an **open action before thesis writeup**. Honest thesis framing: *additional encoders raise the majority-class-driven global metric but do not resolve the PMEmo class-imbalance ceiling.*
 
 ---
 
