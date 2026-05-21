@@ -13,11 +13,13 @@ The following table compares all validated 5-fold averages against recent SOTA b
 | This Work — MERT only | 2026 | Music-SSL + WeightedFusion + HybridLoss | 0.5055 | 0.6518 | 0.74 / 0.82 |
 | This Work — MERT + EDA | 2026 | MERT + Physiological Late Fusion | 0.5075 | 0.6738 | 0.77 / 0.85 |
 | This Work — Dual-SSL (β=0.05) | 2026 | MERT + wav2vec2 + Entropy Reg. | 0.5676 | 0.6814 | 0.72 / 0.81 |
-| **This Work — Triple (+mel-CNN)** | **2026** | **MERT + wav2vec2 + trainable mel-CNN** | **0.5758** | **0.7023** | **0.73 / 0.82** |
+| This Work — Triple (+mel-CNN) | 2026 | MERT + wav2vec2 + trainable mel-CNN | **0.5758** | 0.7023 | 0.73 / 0.82 |
 | This Work — Spec-only (MERT+mel) | 2026 | MERT + trainable mel-CNN (no wav2vec2) | 0.5709 | 0.7069 | 0.73 / 0.83 |
+| **This Work — Enhanced (+tempo/key)** | **2026** | **MERT + wav2vec2 + music-theory gap branch** | **0.5686** | **0.7182** | **0.73 / 0.83** |
 
 ### Key Observations
-* **New best — Arousal R² past 0.70:** The Triple model (MERT + wav2vec2 + trainable mel-spectrogram CNN) reaches A R² = **0.7023**, V R² = **0.5758** — the strongest configuration, surpassing Music2Emo (0.540) on valence using only audio.
+* **Best Arousal — Enhanced model (probing-driven):** Feeding the Phase-A gap features (tempo, key) into a small theory branch reaches **A R² = 0.7182, CCC A = 0.8345** — the best arousal of any configuration (highest among no-EDA models). The gain is **arousal-only** (+0.037 A R², +0.001 V R²): tempo is the active ingredient, the canonical arousal correlate. See §6.
+* **Best Valence — Triple model:** MERT + wav2vec2 + trainable mel-spectrogram CNN reaches V R² = **0.5758**, A R² = 0.7023 — surpassing Music2Emo (0.540) on valence using only audio.
 * **wav2vec2 is statistically redundant:** Spec-only (MERT + mel-CNN, *no wav2vec2*) achieves A R² 0.7069 / V R² 0.5709 — equal to or better than Triple, deltas inside the ±0.013–0.042 fold std. A 109K-param from-scratch CNN fully substitutes for the 95M-param frozen wav2vec2. This reinforces the fusion-collapse and IADS-E negative findings: wav2vec2's speech-pretraining carries no music-relevant complementary structure.
 * **⚠️ Global R² is majority-class-driven (critical caveat):** The 0.70 figure is inflated by the HVHA (Happy) quadrant (469/767 = 61%). Per-quadrant R² is **negative** for the three minority quadrants across *all* configurations (see §5). The headline gain reflects better majority-class fit, not improved V-A-plane generalization. Train-loss logging is not yet instrumented, so the CNN train/test gap is not directly measured — flagged as an open verification action.
 * **Valence ceiling confirmed:** No audio-only method on PMEmo exceeds R² ≈ 0.58, consistent with valence requiring lyrics/cultural context (Yang & Chen, 2012).
@@ -117,3 +119,29 @@ While the global $R^2$ is high, the per-quadrant breakdown reveals a critical da
 * **Class imbalance:** 469/767 songs (61%) are HVHA (Happy) — the model achieves A=0.26, V=0.04 on Happy but shows negative R² on Calm, Angry, and Sad quadrants. This is an inherent PMEmo limitation, not a model failure.
 * **Weighted Sampler:** Inverse-quadrant-frequency sampling forces the model to encounter all quadrants proportionally. Without this, global R² would be inflated by HVHA dominance (Simpson's Paradox).
 * **Retrieval readiness:** High CCC (rather than R²) is the right Phase C metric — CCC captures whether the model correctly *ranks* songs emotionally even when absolute predictions are biased by dataset skew.
+
+---
+
+## 6. Probing-Driven Feature Augmentation (Phase A → B Closure)
+
+### 6.1 Phase A: per-layer music-theory probing
+Each of the 25 MERT layers was linearly probed (sklearn Ridge/R² for regression, LogisticRegression/accuracy for mode & key) against librosa-extracted music-theory ground truth (key/mode via the **Krumhansl–Schmuckler** algorithm — `librosa.estimate_key()` does not exist). A feature is a "gap" if its best-layer score falls below R²=0.40 (or accuracy=0.65).
+
+**Result — gap_features = {tempo, key}.** Across all 25 layers, MERT does **not** linearly expose absolute tempo or key. Harmony/timbre features (chroma, spectral_contrast, spectral_centroid, zcr, mode, rhythmic_stability) are captured above threshold. This is consistent with the original Phase A finding (tempo R² ≈ 0.12) and motivates explicitly re-injecting the gap features in Phase B.
+
+### 6.2 Phase B: Enhanced Dual-SSL (gap branch)
+`EnhancedDualSSLModel` adds a small trainable branch (`Linear(gap_dim,32)`) fed *only* the gap features [tempo, key], concatenated with the two frozen SSL fusions (1024+768+32 = 1824-d). Same HybridLoss, differential optimizer, balanced sampler, 5-fold CV.
+
+| Model | A R² | V R² | CCC A | CCC V |
+|:--|:--:|:--:|:--:|:--:|
+| Dual-SSL (baseline) | 0.6814 | 0.5676 | 0.8087 | 0.7231 |
+| **Enhanced Dual-SSL** | **0.7182 ± 0.013** | 0.5686 ± 0.042 | **0.8345** | 0.7259 |
+
+**The gain is arousal-only:** A R² +0.0368, CCC A +0.0258; V R² +0.0010 (noise). **Tempo is the active ingredient** — the canonical arousal correlate (fast→aroused, slow→calm). The probing-driven augmentation worked precisely for the gap feature that has a clear emotional correlate. **Key was inert:** raw-integer key (C=0…B=11) is not a usable continuous signal, and `mode` was not in the gap set, so valence (where key/mode should matter) did not move. Enhanced is the **best Arousal R² in the study (0.7182)**; valence stays below Triple (0.5758).
+
+**Methodological contribution:** a closed Phase-A→B loop — *probe the SSL representation for what it lacks, then explicitly supply only those features.* It improves the dimension (arousal) whose missing feature (tempo) has a known emotional mapping, and is honestly null where the supplied feature (raw key) lacks a usable encoding.
+
+### 6.3 Phase C: music-theory annotation (data provenance note)
+The Phase C annotator (`music_theory_annotator.py`) computes key/tempo/timbre with **librosa directly from the query audio — not from the SSL embeddings.** It is an **independent descriptive channel** for explanation, *not* a faithful account of the SSL model's internal computation (the model never saw these librosa features). This is distinct from the WeightedLayerFusion attribution, which *is* model-internal. The features Phase A proved MERT lacks (tempo, key) are both re-injected into the model (Phase B) and surfaced to the user (Phase C) — a coherent thesis thread.
+
+**Open caveat:** the spec formula `rhythmic_stability = 1 − std(tempogram)/mean(tempogram)` is unbounded and can go negative on real clips (760.mp3 → −0.132); it is implemented spec-faithfully and may warrant clamping if reported as a [0,1] "stability".

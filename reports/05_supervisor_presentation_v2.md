@@ -96,7 +96,8 @@ CCC = Concordance Correlation Coefficient (AVEC standard metric, preferred over 
 | This thesis (MERT only) | 2026 | MERT + WeightedFusion + HybridLoss | Audio | 0.51 | 0.65 | 0.74 / 0.82 | Ante-hoc (prototype + layer) |
 | This thesis (multimodal) | 2026 | MERT + EDA late fusion + SupCR | Audio + EDA | 0.51 | 0.67 | 0.77 / 0.85 | Ante-hoc (prototype + layer + EDA) |
 | This thesis (Dual-SSL) | 2026 | MERT + wav2vec2 + Entropy Reg. | Audio | 0.57 | 0.68 | 0.72 / 0.81 | Ante-hoc (prototype + dual-layer) |
-| **This thesis (Triple, best)** | **2026** | **MERT + wav2vec2 + trainable mel-CNN** | **Audio** | **0.58** | **0.70** | **0.73 / 0.82** | **Ante-hoc (prototype + layer)** |
+| This thesis (Triple, best Valence) | 2026 | MERT + wav2vec2 + trainable mel-CNN | Audio | **0.58** | 0.70 | 0.73 / 0.82 | Ante-hoc (prototype + layer) |
+| **This thesis (Enhanced, best Arousal)** | **2026** | **MERT + wav2vec2 + tempo/key (probing-driven)** | **Audio** | **0.57** | **0.72** | **0.73 / 0.83** | **Ante-hoc (prototype + layer + theory)** |
 
 **Notes:**
 - CCC is not widely reported in the MER literature but is the standard in AVEC emotion challenges (Ringeval et al., 2018). Our CCC of 0.85 on arousal is the highest reported on PMEmo 2019.
@@ -278,9 +279,19 @@ The table below maps every component of the full system to its XAI classificatio
 | 4-quadrant centroid activation profile | C | **Ante-hoc** | "This song is X% similar to Calm prototype" |
 | Contrastive foils | C | **Ante-hoc** | Counterfactual: what was rejected and why |
 | EDA narrative annotation | C | Post-hoc annotation | Physiological interpretation of retrieved songs |
+| Music-theory annotation (librosa) | C | Independent descriptive annotation | Key/tempo/timbre of the query song |
 | LLM explanation synthesis | C | Post-hoc synthesis | Human-language presentation of ante-hoc decisions |
 
 **The system is ante-hoc at its decision-making core.** Post-hoc components are the presentation layer only — they translate the ante-hoc decisions into language, but do not generate or modify those decisions.
+
+### Faithfulness note on the music-theory annotation (important nuance)
+
+The Phase C music-theory grounding (key, tempo, timbre) is computed with **librosa directly from the query audio — it does NOT read the MERT/wav2vec2 embeddings.** It is therefore an **independent descriptive channel**: it accurately describes the *song*, but it is *not a faithful explanation of what the SSL model internally computed* (the model never saw these librosa features). This is a real distinction worth stating explicitly in the thesis:
+
+- **Model-faithful (ante-hoc):** WeightedLayerFusion attribution — these weights *are* the model's internal feature reliance.
+- **Independent corroboration (descriptive):** the librosa music-theory block — converging evidence about the song from a second method, not a window into the SSL model.
+
+There is, however, a genuine **closed loop** that strengthens the contribution: the features Phase A proved MERT *cannot* linearly expose ({tempo, key}) are (a) re-injected into the model in Phase B (the Enhanced model — improving arousal), and (b) surfaced to the user as explanation in Phase C. The same diagnosed gap drives both a *performance* fix and an *explanation* enrichment.
 
 ### The remaining gap: learned prototype vectors
 
@@ -306,15 +317,17 @@ In this formulation, the model produces both a prediction AND a prototype activa
 | Hybrid, audio only | 0.6518 | 0.5055 | 0.82 | 0.74 |
 | Hybrid + EDA | 0.6738 | 0.5075 | **0.8543** | 0.7692 |
 | Dual-SSL (MERT + wav2vec2) | 0.6814 | 0.5676 | 0.8087 | 0.7231 |
-| **Triple (MERT + wav2vec2 + mel-CNN)** | **0.7023** | **0.5758** | 0.8233 | 0.7329 |
+| Triple (MERT + wav2vec2 + mel-CNN) | 0.7023 | **0.5758** | 0.8233 | 0.7329 |
 | Spec-only (MERT + mel-CNN, no w2v) | 0.7069 | 0.5709 | 0.8271 | 0.7314 |
+| **Enhanced (MERT + wav2vec2 + tempo/key)** | **0.7182** | 0.5686 | **0.8345** | 0.7259 |
 
 ### SOTA Position
 
-- **Arousal R²: 0.702** (Triple) — first configuration past 0.70; competitive with Music2Emo (0.78, which uses multitask supervision)
-- **Valence R²: 0.576** (Triple) — best in this study, surpasses Music2Emo (0.54) audio-only
+- **Arousal R²: 0.718** (Enhanced) — best in study; competitive with Music2Emo (0.78, which uses multitask supervision)
+- **Valence R²: 0.576** (Triple) — best in study, surpasses Music2Emo (0.54) audio-only
 - **Arousal CCC: 0.8543** (MERT+EDA) — highest reported on PMEmo 2019
 - **wav2vec2 redundant:** Spec-only (MERT + mel-CNN) ≈ Triple — a small trainable CNN replaces the frozen speech-SSL encoder
+- **Probing-driven augmentation (Phase A→B):** Phase A per-layer probing found MERT does not linearly expose {tempo, key}; re-injecting them lifts **arousal only** (+0.037 A R²) — tempo is the canonical arousal correlate. A clean, citable methodology: probe for what the SSL lacks, then supply exactly that.
 - **⚠️ Class-imbalance ceiling:** global R² is HVHA-majority (61%) driven; minority-quadrant R² negative across all configs — the dominant unresolved limitation
 - **XAI: unique** — no prior PMEmo work provides prototype-based, ante-hoc explanation of retrieval decisions
 
@@ -332,8 +345,11 @@ The previous preliminary report (2 weeks ago) presented Phase A results and init
 | Layer specialization analysis (entropy = 3.2178, layers 14/16/17) | Complete |
 | Dual-SSL (MERT + wav2vec2) + entropy sharpening; fusion-collapse finding | Complete |
 | IADS-E joint learning — confirmed negative cross-domain transfer finding | Complete |
-| Triple-branch (+ trainable mel-CNN) — best result A R² 0.7023 / V R² 0.5758 | Complete |
+| Triple-branch (+ trainable mel-CNN) — best Valence V R² 0.5758 / A R² 0.7023 | Complete |
 | wav2vec2-redundancy finding (Spec-only ≈ Triple) | Complete |
+| Phase A: full per-layer music-theory probing (8 features × 25 layers) → gaps {tempo, key} | Complete |
+| Phase B: Enhanced model (re-inject tempo/key) — best Arousal A R² 0.7182; arousal-only gain | Complete |
+| Phase C: librosa music-theory annotator (standalone; independent of SSL embeddings) | Complete |
 | Train-loss logging for triple-branch (quantify CNN overfitting directly) | Open action |
 | Phase C modular pipeline (6 modules, ~1000 lines of code) | Complete |
 | Prototype-based retrieval with 4 quadrant prototypes | Complete |

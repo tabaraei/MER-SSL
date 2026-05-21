@@ -1,0 +1,56 @@
+{
+  "gap_features": [
+    "tempo",
+    "key"
+  ],
+  "detail": {
+    "chroma": {
+      "metric": "R\u00b2",
+      "best_score": 0.6801,
+      "threshold": 0.4,
+      "is_gap": false
+    },
+    "tempo": {
+      "metric": "R\u00b2",
+      "best_score": -0.8307,
+      "threshold": 0.4,
+      "is_gap": true
+    },
+    "rhythmic_stability": {
+      "metric": "R\u00b2",
+      "best_score": 0.7346,
+      "threshold": 0.4,
+      "is_gap": false
+    },
+    "spectral_centroid": {
+      "metric": "R\u00b2",
+      "best_score": 0.9206,
+      "threshold": 0.4,
+      "is_gap": false
+    },
+    "spectral_contrast": {
+      "metric": "R\u00b2",
+      "best_score": 0.731,
+      "threshold": 0.4,
+      "is_gap": false
+    },
+    "zcr": {
+      "metric": "R\u00b2",
+      "best_score": 0.9566,
+      "threshold": 0.4,
+      "is_gap": false
+    },
+    "mode": {
+      "metric": "acc",
+      "best_score": 0.673,
+      "threshold": 0.65,
+      "is_gap": false
+    },
+    "key": {
+      "metric": "acc",
+      "best_score": 0.5849,
+      "threshold": 0.65,
+      "is_gap": true
+    }
+  }
+}

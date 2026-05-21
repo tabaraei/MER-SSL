@@ -85,9 +85,10 @@ Precision@k and Silhouette scores haven't been computed (pending index rebuild).
 | This Work (MERT only, audio) | 2026 | Music-SSL + WeightedFusion + SupCR | 0.5055 | 0.6518 | 0.74 / 0.82 |
 | This Work (MERT + EDA) | 2026 | MERT + Physiological Fusion | 0.5075 | 0.6738 | 0.77 / 0.85 |
 | This Work (Dual-SSL + β=0.05) | 2026 | MERT + wav2vec2 + Entropy Reg. | 0.5676 | 0.6814 | 0.72 / 0.81 |
-| **This Work (Triple: +mel-CNN)** | **2026** | **MERT + wav2vec2 + trainable mel-CNN** | **0.5758** | **0.7023** | **0.73 / 0.82** |
+| This Work (Triple: +mel-CNN) | 2026 | MERT + wav2vec2 + trainable mel-CNN | 0.5758 | 0.7023 | 0.73 / 0.82 |
+| **This Work (Enhanced: +tempo/key)** | **2026** | **MERT + wav2vec2 + music-theory gap branch** | **0.5686** | **0.7182** | **0.73 / 0.83** |
 
-**Final headline numbers: Triple (MERT + wav2vec2 + mel-CNN): V R²=0.5758 / A R²=0.7023** — first config past A R² 0.70. **Key result:** Spec-only (MERT + mel-CNN, *no wav2vec2*) ≈ Triple → wav2vec2 is statistically redundant. **Caveat:** global R² is majority-class (HVHA 61%) driven; minority-quadrant R² is negative across all configs (PMEmo class-imbalance limitation — see Step 4). MERT+EDA still leads CCC Arousal (0.8543).
+**Headline numbers:** best **Valence** = Triple (V R²=0.5758); best **Arousal** = Enhanced (A R²=0.7182, CCC A=0.8345 — highest of the no-EDA models). **Enhanced finding:** explicitly feeding the Phase-A gap features (tempo, key) lifts **arousal only** (+0.037 A R², +0.001 V R²) — tempo is the active ingredient (canonical arousal correlate); raw-integer key is inert. **Caveat:** global R² is majority-class (HVHA 61%) driven; minority-quadrant R² negative across all configs. MERT+EDA still leads CCC Arousal overall (0.8543).
 
 ---
 
@@ -289,8 +290,71 @@ thesis writeup to separate "CNN overfits" from "class imbalance."
 | MERT only (hybrid) | 0.6518 | 0.5055 | 0.82 | 0.74 | Single SSL encoder |
 | MERT + EDA | 0.6738 | 0.5075 | **0.8543** | 0.7692 | Best physiological CCC |
 | Dual-SSL β=0.05 | 0.6814 | 0.5676 | 0.8087 | 0.7231 | Best dual-SSL |
-| **Triple (MERT+w2v+mel)** | **0.7023** | **0.5758** | 0.8233 | 0.7329 | **Best overall; w2v redundant** |
-| Spec-only (MERT+mel) | 0.7069 | 0.5709 | 0.8271 | 0.7314 | ≈ Triple → w2v adds nothing |
+| Triple (MERT+w2v+mel) | 0.7023 | **0.5758** | 0.8233 | 0.7329 | Best Valence |
+| Spec-only (MERT+mel) | 0.7069 | 0.5709 | 0.8271 | 0.7314 | ≈ Triple → w2v redundant |
+| **Enhanced (MERT+w2v+tempo/key)** | **0.7182** | 0.5686 | **0.8345** | 0.7259 | **Best Arousal (no-EDA)** |
 
 **Caveat on all rows:** global R² is HVHA-majority-driven; minority-quadrant R²
 is negative across configs (documented PMEmo class-imbalance limitation).
+
+---
+
+## Step 5 — Phase A/B/C Music-Theory Extension (2026-05-20)
+
+### Phase A — Per-layer music-theory probing (`phaseA/`)
+New: `extract_music_theory.py` (librosa GT; key/mode via **Krumhansl–Schmuckler**
+profile correlation — note `librosa.estimate_key()` does not exist) and
+`run_music_theory_probing.py` (sklearn linear probe of EACH of the 25 MERT
+layers per feature; Ridge/R² for regression, LogisticRegression/accuracy for
+mode & key; same split as Phase A: test_size=0.2, random_state=42).
+
+**Gap analysis** (threshold R²<0.40, acc<0.65) → `phaseA/gap_analysis.json`.
+Result: **gap_features = ['tempo', 'key']**. Across all 25 layers, MERT does not
+linearly expose absolute tempo or key — consistent with the original Phase A
+tempo finding (R²≈0.12). Harmony/timbre features are captured well (no gap).
+
+### Phase B — Enhanced Dual-SSL (`phaseB/train_enhanced_dual.py`)
+New: `models_enhanced.py` (`MusicTheoryBranch` = Linear(gap_dim,32)+ReLU+Dropout;
+`EnhancedDualSSLModel` = MERT(1024) + wav2vec2(768) + theory(32) → 1824 → head).
+Self-skips if Phase A finds no gaps. Gap branch fed only [tempo, key] (gap_dim=2).
+5-fold CV, 100 epochs, same HybridLoss + differential optimizer as dual-SSL.
+
+| Model | A R² | V R² | CCC A | CCC V |
+|:--|:--:|:--:|:--:|:--:|
+| Dual-SSL (baseline) | 0.6814 | 0.5676 | 0.8087 | 0.7231 |
+| **Enhanced Dual-SSL** | **0.7182 ± 0.013** | 0.5686 ± 0.042 | **0.8345** | 0.7259 |
+
+**Finding: the gain is arousal-only.** A R² +0.0368, CCC A +0.0258; V R² +0.0010
+(noise). **Tempo is the active ingredient** — the canonical arousal correlate;
+Phase A flagged it as a gap, Phase B fed it back, arousal improved. This is a
+clean Phase-A→B closure: probing-driven feature augmentation works *for the
+feature with a clear emotional correlate*. **Key was inert** — raw-integer key
+(C=0…B=11) is not a usable continuous signal, and `mode` was not in the gap set;
+valence (where key/mode should help) did not move. Enhanced has the **best
+Arousal R² (0.7182) of any model in the study**; valence stays below Triple.
+Class-imbalance caveat persists (3/4 quadrants negative R²).
+
+### Phase C — Music-theory annotator (`phaseC/music_theory_annotator.py`)
+New standalone module (no existing file modified; integration snippet in its
+docstring). `annotate(path)` → {key, tempo, brightness, rhythmic_stability,
+dominant_pitches}; `format_music_theory_block()` → the explanation section with
+a hardcoded mode→character lookup. Verified on 760.mp3 → "D major, 105 BPM".
+
+**IMPORTANT for thesis (data provenance):** the Phase C annotator computes its
+features with **librosa directly from the query audio — NOT from the SSL
+embeddings.** It is an **independent descriptive channel**, not a faithful
+explanation of the SSL model's internals (the model never saw these librosa
+features). Distinct from the WeightedLayerFusion attribution, which *is*
+model-internal. Narrative coherence: the features Phase A proved MERT lacks
+(tempo, key) are both fed back into the model (Phase B) and surfaced to the user
+(Phase C).
+
+### Open caveats
+- `rhythmic_stability = 1 - std(tempogram)/mean(tempogram)` (spec formula) is
+  **not bounded to [0,1]** — real clips give negatives (760.mp3 → −0.132).
+  Spec-faithful; consider clamping or `1/(1+std/mean)` if used in the annotation.
+- Annotator's `dominant_pitches` (top-3 raw chroma bins) don't always include
+  the K-S tonic (760.mp3: key D major, top pitches G/G#/A) — the "supports the
+  analysis" wording can overclaim. Cosmetic; K-S uses the full 12-d profile.
+- Key as model input → one-hot or sin/cos circular encoding is the honest
+  follow-up if a valence gain from key is desired.

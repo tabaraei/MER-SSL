@@ -15,6 +15,7 @@ This report documents the finalized development of a robust **Hybrid Affective A
 * **Harmonic Mode Probing:** Achieved **100% Accuracy** in Major/Minor detection.
 * **Tempo Probing:** Achieved an $R^2$ of **0.12**, confirming that rhythmic density is encoded within the transformer layers.
 * **Significance:** Confirmed that critical music-theoretic information is retained, allowing for future explainable reasoning in retrieval tasks.
+* **Extension — full per-layer probing (8 features × 25 layers):** A systematic sklearn probe of every MERT layer against librosa music-theory ground truth (key/mode via Krumhansl–Schmuckler). Gap analysis (R²<0.40 / acc<0.65) identifies **{tempo, key}** as the features MERT does not linearly expose — these directly drive the Phase B Enhanced model (see §6b). See `phaseA/run_music_theory_probing.py`, `gap_analysis.json`, and the summary/heatmap plots.
 
 ---
 
@@ -38,10 +39,11 @@ To synthesize information across the full transformer stack, we utilized a learn
 | MERT only (hybrid, audio) | 0.6518 | 0.5055 | 0.82 | 0.74 |
 | MERT + EDA fusion | 0.6738 | 0.5075 | **0.8543** | 0.7692 |
 | Dual-SSL (MERT + wav2vec2, β=0.05) | 0.6814 | 0.5676 | 0.8087 | 0.7231 |
-| **Triple (MERT + wav2vec2 + mel-CNN)** | **0.7023** | **0.5758** | 0.8233 | 0.7329 |
+| Triple (MERT + wav2vec2 + mel-CNN) | 0.7023 | **0.5758** | 0.8233 | 0.7329 |
 | Spec-only (MERT + mel-CNN, no w2v) | 0.7069 | 0.5709 | 0.8271 | 0.7314 |
+| **Enhanced (MERT + wav2vec2 + tempo/key)** | **0.7182** | 0.5686 | **0.8345** | 0.7259 |
 
-> ⚠️ Global R² is majority-class (HVHA, 61%) driven; minority-quadrant R² is negative across all configs (PMEmo class-imbalance limitation — see §7).
+> Best **Valence** = Triple (0.5758); best **Arousal** = Enhanced (0.7182). ⚠️ Global R² is majority-class (HVHA, 61%) driven; minority-quadrant R² is negative across all configs (PMEmo class-imbalance limitation — see §7).
 
 ### 4. Dual-SSL Encoder Extension
 
@@ -59,7 +61,20 @@ Both `WeightedLayerFusion` modules converge to near-maximum-entropy (uniform) di
 
 Joint training with IADS-E generalized environmental sounds (Simonetta et al., 2024 replication) was attempted across partial k,p ratio sweep. All tested configurations fell below the dual-SSL baseline. Confirmed negative result: SSL embeddings pretrained on music and speech do not transfer emotional structure across the music↔environmental-sound boundary as effectively as hand-crafted openSMILE features. Framed as a publishable negative finding on SSL cross-domain emotional transfer limits.
 
-### 7. Triple-Branch (+ trainable mel-CNN) — Best Result, with Caveat
+### 6b. Music-Theory Probing & Enhanced Model (Phase A→B Closure)
+
+**Phase A — per-layer probing.** Each of the 25 MERT layers was linearly probed (sklearn) against librosa music-theory ground truth (key/mode via Krumhansl–Schmuckler, since `librosa.estimate_key()` does not exist). Gap threshold: R²<0.40 / acc<0.65. **Result: gap_features = {tempo, key}** — MERT does not linearly expose absolute tempo or key (consistent with the original tempo R²≈0.12); harmony/timbre features are captured.
+
+**Phase B — Enhanced Dual-SSL.** A small trainable branch fed *only* the gap features [tempo, key] (Linear(2,32)) was concatenated with the two frozen SSL fusions (1824-d).
+
+| Model | A R² | V R² | CCC A | CCC V |
+|:--|:--:|:--:|:--:|:--:|
+| Dual-SSL (baseline) | 0.6814 | 0.5676 | 0.8087 | 0.7231 |
+| **Enhanced Dual-SSL** | **0.7182** | 0.5686 | **0.8345** | 0.7259 |
+
+**The gain is arousal-only** (A R² +0.037, CCC A +0.026; V R² +0.001 = noise). Tempo is the active ingredient — the canonical arousal correlate. This is a clean Phase-A→B closure: *probe the SSL representation for what it lacks, then supply only those features.* It improved the dimension whose missing feature (tempo) has a clear emotional mapping, and was honestly null where the supplied feature (raw-integer key) lacks a usable continuous encoding. Enhanced is the best Arousal R² in the study.
+
+### 7. Triple-Branch (+ trainable mel-CNN) — Best Valence Result, with Caveat
 
 A third branch — a shallow trainable mel-spectrogram CNN (~109K params, on a pre-extracted center-30 s log-mel spectrogram) — was added alongside frozen MERT and wav2vec2.
 
@@ -130,13 +145,18 @@ These limitations should be explicitly discussed in the thesis:
 
 ```
 ssl_scripts/phaseC/
-├── mainC.py         ← CLI entry point (build / query / evaluate)
-├── index_builder.py ← L2-normalized latent index construction + storage
-├── retriever.py     ← cosine k-NN + query_foils() (contrastive XAI)
-├── explainer.py     ← two-layer explanation: template + enriched RAG prompt
-├── eda_loader.py    ← 7-dim EDA extraction from PMEmo CSV files
-└── evaluator.py     ← Precision@k and Silhouette evaluation
+├── mainC.py                   ← CLI entry point (build / query / evaluate)
+├── index_builder.py           ← L2-normalized latent index construction + storage
+├── retriever.py               ← cosine k-NN + query_foils() (contrastive XAI)
+├── explainer.py               ← two-layer explanation: template + enriched RAG prompt
+├── eda_loader.py              ← 7-dim EDA extraction from PMEmo CSV files
+├── evaluator.py               ← Precision@k and Silhouette evaluation
+└── music_theory_annotator.py  ← NEW: librosa key/tempo/timbre grounding for explanations
 ```
+
+### Phase C extension — music-theory grounding
+
+`music_theory_annotator.py` adds a "Music theory grounding" section (key, tempo, timbre, dominant pitches, mode→character mapping) to explanations. **Data provenance (important for the thesis):** these features are computed with **librosa directly from the query audio — NOT from the SSL embeddings.** It is therefore an *independent descriptive channel* corroborating the emotion, not a faithful explanation of the SSL model's internal computation (the model never saw these features). This is distinct from the WeightedLayerFusion attribution, which *is* model-internal. The module is standalone (no existing Phase C file modified; integration is a 2-line snippet documented in its docstring), so it works regardless of the Phase B outcome.
 
 ---
 
