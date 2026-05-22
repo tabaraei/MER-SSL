@@ -247,6 +247,9 @@ def main():
         neighbors = retriever.query(q_latent, k=args.top_k, exclude_self=True)
         foils     = retriever.query_foils(q_latent, n_foils=args.n_foils)
 
+        # Ante-hoc 4-prototype activation profile (cosine sim to quadrant centroids)
+        prototype_profile = retriever.prototype_profile(q_latent)
+
         # Get layer weights from index (captured at build time)
         layer_weights = index.get("layer_weights", None)
 
@@ -254,6 +257,7 @@ def main():
         template = explainer.generate_template(
             query_id=args.query_id, query_arousal=q_arousal,
             query_valence=q_valence, query_eda=q_eda, neighbors=neighbors,
+            prototype_profile=prototype_profile,
         )
         print("\n" + template)
 

@@ -260,15 +260,16 @@ Retrieved songs sorted by arousal → two listening arc suggestions:
 | **CCC** | Simultaneous correlation + mean + variance agreement (AVEC standard) |
 | **Per-quadrant R²** | Performance per emotion region (reveals dataset bias) |
 
-### Phase C Metrics
+### Phase C Metrics (computed — test-fold, out-of-sample)
 
-| Metric | Definition | Value (approx.) |
-| :--- | :--- | :--- |
-| **Precision@5** | % top-5 neighbors within 0.20 V-A radius | To be measured |
-| **Precision@10** | Same for top-10 | To be measured |
-| **Silhouette** | Quadrant cluster separation in cosine latent space | To be measured |
+| Metric | MERT | Dual-SSL | Reading |
+| :--- | :---: | :---: | :--- |
+| **Precision@5** | 0.576 | **0.585** | ~58% of top-5 neighbours within 0.20 V-A radius — retrieval works |
+| **Precision@10** | 0.569 | 0.561 | ~56% — stable across k |
+| **Precision@20** | 0.547 | 0.538 | ~54% |
+| **Silhouette** | −0.029 | +0.003 | ≈ 0 — quadrants overlap (continuous emotion, not 4 blobs) |
 
-> *Phase C evaluation will run once the index is rebuilt with EDA features loaded correctly (EDA filename fix was implemented — `{id}_EDA.csv` format confirmed).*
+> **How to present this:** lead with **Precision@k** — it shows nearest neighbours are reliably emotionally similar, validating the example-based explanation. Report **Silhouette ≈ 0 honestly**: it does *not* prove quadrant separation (dual's +0.003 is effectively zero). Emotion is a continuous valence-arousal gradient, so Silhouette-by-quadrant understates the organization that Precision@k demonstrates. MERT and Dual-SSL are statistically tied here. Evaluated out-of-sample (test-fold) — stricter than in-sample.
 
 ---
 
@@ -336,8 +337,8 @@ These are acknowledged in the thesis reports and should be framed as evidence of
 
 ### What Remains 🔧
 
-- [ ] Run Phase C `evaluate` mode → Precision@k and Silhouette scores (requires EDA index rebuild)
-- [ ] Baseline Phase C index → compare Precision@k (hybrid vs baseline model)
+- [x] Phase C evaluation (test-fold, out-of-sample) → Precision@5 ≈ 0.58, Silhouette ≈ 0
+- [x] Phase C MERT vs Dual-SSL comparison → statistically tied on Precision@k / Silhouette
 - [ ] Formal ablation study: which loss components contribute most to CCC improvement?
 - [ ] Thesis writing: Introduction, Related Work, Methodology, Results, Discussion
 

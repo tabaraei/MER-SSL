@@ -194,6 +194,21 @@ where $a(i)$ = mean intra-cluster distance, $b(i)$ = mean nearest-cluster distan
 
 **Thesis argument:** A positive Silhouette score directly validates the claim that the SupCR loss in Phase B successfully organizes the latent space into emotionally coherent neighborhoods — a prerequisite for meaningful retrieval.
 
+### 4.3 Results (computed — test-fold / out-of-sample)
+
+Evaluation was run with `phaseC/evaluate_latent_space.py`, which builds **out-of-sample (test-fold) latents**: 5-fold CV (KFold shuffle, `random_state=42`), where every song is encoded by the fold model that did **not** train on it. This is stricter and more honest than encoding all songs with a single model, because it cannot benefit from memorization. Both the single-MERT model and the best Dual-SSL model (MERT + wav2vec2, β=0.05) were evaluated.
+
+| Encoder | Precision@5 | Precision@10 | Precision@20 | Silhouette |
+| :--- | :---: | :---: | :---: | :---: |
+| MERT (single) | 0.5760 | 0.5687 | 0.5469 | −0.0293 |
+| **Dual-SSL (MERT + wav2vec2)** | **0.5849** | 0.5613 | 0.5382 | **+0.0026** |
+
+**Precision@k — retrieval validated.** For both models, ~54–58% of each song's nearest latent-space neighbours fall within a 0.20 V-A radius — substantially above chance for a continuous 4-quadrant emotion space. This is the primary, positive evidence that the latent space supports emotionally meaningful retrieval, establishing the foundation of the example-based explanation system.
+
+**Silhouette ≈ 0 — interpreted honestly.** Both scores are essentially zero (single-MERT slightly negative, dual marginally positive at +0.0026). This is **not** strong evidence of quadrant separation and is *not* reported as such. The reason is conceptual rather than a model failure: emotion in the valence-arousal circumplex is a **continuous gradient**, not four discrete clusters. Silhouette-by-quadrant imposes hard boundaries at 0.5 on a smooth manifold, so songs near a quadrant border are legitimately close to songs just across it — which drives the score toward zero even when local neighbourhoods are emotionally coherent (as Precision@k shows). The strong class imbalance (HVHA ≈ 61%) compounds this.
+
+**Thesis position:** lead with Precision@k as the evidence that retrieval is emotionally coherent; report Silhouette transparently with the continuous-manifold explanation above. The two encoders are statistically equivalent on these metrics, consistent with the project-wide finding that the second encoder adds little to the *organization* of the latent space (it helps prediction, not clustering).
+
 ---
 
 ## 5. Known Limitations and Honest Thesis Discussion

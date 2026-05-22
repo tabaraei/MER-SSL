@@ -26,6 +26,14 @@ Academic references:
 
 import numpy as np
 
+# Human-readable labels for the 4 Russell-quadrant prototypes (ante-hoc profile).
+_QUAD_LABELS = {
+    "HVHA": "Happy/Energetic",
+    "HVLA": "Calm",
+    "LVHA": "Tense/Angry",
+    "LVLA": "Sad",
+}
+
 
 class ExplainableRAG:
 
@@ -198,8 +206,30 @@ class ExplainableRAG:
 
     # ── Template explanation (technical, deterministic) ───────────────────────
 
+    def _prototype_profile_lines(self, prototype_profile):
+        """Render the ante-hoc 4-quadrant prototype activation profile."""
+        if not prototype_profile or not prototype_profile.get("similarities"):
+            return []
+        sims = prototype_profile["similarities"]
+        best = prototype_profile.get("best")
+        lines = [
+            "",
+            "🎯  PROTOTYPE ACTIVATION PROFILE (ante-hoc)",
+            "-" * 65,
+            "  Cosine similarity of the query to each emotion-quadrant centroid",
+            "  (the 4 prototypes are the mean latent of each Russell quadrant):",
+        ]
+        for code, sim in sorted(sims.items(), key=lambda kv: kv[1], reverse=True):
+            marker = "  ◄ best match" if code == best else ""
+            lines.append(f"    {code} ({_QUAD_LABELS.get(code, code)}) : {sim:+.4f}{marker}")
+        if best:
+            lines.append(
+                f"  → Query most strongly matches the {best} "
+                f"({_QUAD_LABELS.get(best, best)}) prototype.")
+        return lines
+
     def generate_template(self, query_id, query_arousal, query_valence,
-                          query_eda, neighbors):
+                          query_eda, neighbors, prototype_profile=None):
         q_label, q_desc, q_quad = self._quadrant(query_arousal, query_valence)
 
         lines = [
@@ -210,6 +240,9 @@ class ExplainableRAG:
             f"  Arousal         : {self._arousal_description(query_arousal)} ({query_arousal:.3f})",
             f"  Valence         : {self._valence_description(query_valence)} ({query_valence:.3f})",
             f"  Physiology      : {self._eda_summary(query_eda)}",
+        ]
+        lines += self._prototype_profile_lines(prototype_profile)
+        lines += [
             "",
             "📋  RETRIEVAL EXPLANATION",
             "-" * 65,

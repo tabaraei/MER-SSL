@@ -1,0 +1,396 @@
+Explainable MER — full pipeline output for 5 songs
+Index: prototypes_dual.npy | LLM: hf (Qwen/Qwen2.5-3B-Instruct)
+
+######################################################################
+# SONG 562
+######################################################################
+
+----- LAYER 1: DETERMINISTIC TEMPLATE -----
+=================================================================
+🎵  QUERY: Song ID 562
+=================================================================
+  Emotion Region  : High Arousal / High Valence (HVHA)
+  Arousal         : high (0.732)
+  Valence         : positive (0.714)
+  Physiology      : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=50%)
+
+🎯  PROTOTYPE ACTIVATION PROFILE (ante-hoc)
+-----------------------------------------------------------------
+  Cosine similarity of the query to each emotion-quadrant centroid
+  (the 4 prototypes are the mean latent of each Russell quadrant):
+    HVHA (Happy/Energetic) : +0.6704  ◄ best match
+    HVLA (Calm) : +0.6695
+    LVHA (Tense/Angry) : +0.6327
+    LVLA (Sad) : +0.6179
+  → Query most strongly matches the HVHA (Happy/Energetic) prototype.
+
+📋  RETRIEVAL EXPLANATION
+-----------------------------------------------------------------
+  Songs retrieved via cosine similarity in the emotion-aware latent space of the MERT-based Hybrid model (Weighted Layer Fusion + SupCR loss). Query occupies 'HVHA' — energetic and positive affective region.
+
+🔍  TOP-5 RETRIEVED SONGS
+-----------------------------------------------------------------
+  ┌─ Rank 1 | Song ID 296 (cosine sim = 0.9995)
+  │  Quadrant     : HVHA (energetic and positive)
+  │  Arousal      : very high (0.817)
+  │  Valence      : very positive (0.857)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=31%)
+  │  Δ from query : arousal ↑0.08, valence ↑0.14 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 2 | Song ID 909 (cosine sim = 0.9995)
+  │  Quadrant     : HVHA (energetic and positive)
+  │  Arousal      : very high (0.831)
+  │  Valence      : positive (0.683)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=22%)
+  │  Δ from query : arousal ↑0.10 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 3 | Song ID 326 (cosine sim = 0.9995)
+  │  Quadrant     : HVHA (energetic and positive)
+  │  Arousal      : high (0.676)
+  │  Valence      : positive (0.730)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=26%)
+  │  Δ from query : arousal ↓0.06 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 4 | Song ID 91 (cosine sim = 0.9993)
+  │  Quadrant     : HVHA (energetic and positive)
+  │  Arousal      : very high (0.873)
+  │  Valence      : very positive (0.778)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=43%)
+  │  Δ from query : arousal ↑0.14, valence ↑0.06 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 5 | Song ID 821 (cosine sim = 0.9993)
+  │  Quadrant     : HVHA (energetic and positive)
+  │  Arousal      : very high (0.789)
+  │  Valence      : very positive (0.794)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=27%)
+  │  Δ from query : arousal ↑0.06, valence ↑0.08 vs query
+  └─────────────────────────────────────────────────────────
+
+🧠  MUSIC-THEORETIC SUMMARY
+-----------------------------------------------------------------
+  avg neighbor arousal=0.797 | valence=0.768 | mean cosine sim=0.9994
+  Mood arc options (Δarousal = 0.20): Energizing order → [326, 821, 296, 909, 91] (low to high arousal, builds energy). Wind-down order → [91, 909, 296, 821, 326] (high to low arousal, eases into calm).
+=================================================================
+
+----- LAYER 2: LLM EXPLANATION -----
+If you're drawn to music that gets you moving and feeling alive, these tracks carry that same charge. Songs like 296, 91, and 821 are designed to energize your spirit, driving you forward with their powerful beats and uplifting melodies. They fit perfectly because they align beautifully along the V-A plane, offering a high level of arousal and positivity, which perfectly complements your listening profile.
+
+The other tracks, while also energetic and positive, fall short in their emotional intensity, making them less engaging for the type of listener seeking excitement and motivation. Songs like 99, 704, and 457 simply don't match the high arousal and positive valence needed to fully resonate with your mood trajectory.
+
+These songs create a shared physiological and mood experience, evoking a steady escalation of energy and positivity throughout your listening session.
+
+######################################################################
+# SONG 706
+######################################################################
+
+----- LAYER 1: DETERMINISTIC TEMPLATE -----
+=================================================================
+🎵  QUERY: Song ID 706
+=================================================================
+  Emotion Region  : Low Arousal / High Valence (HVLA)
+  Arousal         : low (0.352)
+  Valence         : positive (0.619)
+  Physiology      : moderate electrodermal activity (minimal SCR activity, rising trend, high-arousal ratio=39%)
+
+🎯  PROTOTYPE ACTIVATION PROFILE (ante-hoc)
+-----------------------------------------------------------------
+  Cosine similarity of the query to each emotion-quadrant centroid
+  (the 4 prototypes are the mean latent of each Russell quadrant):
+    HVLA (Calm) : +0.7667  ◄ best match
+    LVLA (Sad) : +0.7333
+    HVHA (Happy/Energetic) : +0.7198
+    LVHA (Tense/Angry) : +0.6745
+  → Query most strongly matches the HVLA (Calm) prototype.
+
+📋  RETRIEVAL EXPLANATION
+-----------------------------------------------------------------
+  Songs retrieved via cosine similarity in the emotion-aware latent space of the MERT-based Hybrid model (Weighted Layer Fusion + SupCR loss). Query occupies 'HVLA' — calm and positive affective region.
+
+🔍  TOP-5 RETRIEVED SONGS
+-----------------------------------------------------------------
+  ┌─ Rank 1 | Song ID 181 (cosine sim = 0.9966)
+  │  Quadrant     : HVLA (calm and positive)
+  │  Arousal      : moderate (0.451)
+  │  Valence      : positive (0.635)
+  │  Physiology   : elevated electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=86%)
+  │  Δ from query : arousal ↑0.10 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 2 | Song ID 299 (cosine sim = 0.9949)
+  │  Quadrant     : HVLA (calm and positive)
+  │  Arousal      : very low (0.183)
+  │  Valence      : positive (0.667)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=36%)
+  │  Δ from query : arousal ↓0.17 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 3 | Song ID 733 (cosine sim = 0.9942)
+  │  Quadrant     : HVLA (calm and positive)
+  │  Arousal      : moderate (0.465)
+  │  Valence      : positive (0.603)
+  │  Physiology   : moderate electrodermal activity (minimal SCR activity, rising trend, high-arousal ratio=50%)
+  │  Δ from query : arousal ↑0.11 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 4 | Song ID 582 (cosine sim = 0.9942)
+  │  Quadrant     : LVLA (melancholic and subdued)
+  │  Arousal      : low (0.366)
+  │  Valence      : neutral (0.476)
+  │  Physiology   : low electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=9%)
+  │  Δ from query : valence ↓0.14 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 5 | Song ID 251 (cosine sim = 0.9934)
+  │  Quadrant     : LVLA (melancholic and subdued)
+  │  Arousal      : low (0.388)
+  │  Valence      : negative (0.433)
+  │  Physiology   : elevated electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=67%)
+  │  Δ from query : valence ↓0.19 vs query
+  └─────────────────────────────────────────────────────────
+
+🧠  MUSIC-THEORETIC SUMMARY
+-----------------------------------------------------------------
+  avg neighbor arousal=0.371 | valence=0.563 | mean cosine sim=0.9947
+  Mood arc options (Δarousal = 0.28): Energizing order → [299, 582, 251, 181, 733] (low to high arousal, builds energy). Wind-down order → [733, 181, 251, 582, 299] (high to low arousal, eases into calm).
+=================================================================
+
+----- LAYER 2: LLM EXPLANATION -----
+Like your track, these songs inhabit a calm, bright emotional space — perfect for unwinding or focused work. They all share a serene, uplifted quality that resonates deeply, aligning perfectly with your quest for peace and positivity. The harmonic consonance and warm acoustic timbres weave together to create an environment where you can either gradually build up energy or effortlessly wind down into a tranquil state. 
+
+These specific songs bind to the query emotionally by clustering closely around the V-A plane (Valence-Arousal) in the low arousal/high valence area, capturing the essence of calmness and positivity. 
+
+The other songs, which are more melancholic and subdued, fail to capture this same emotional warmth and clarity, creating an emotional gap that makes them less suitable for your listening needs.
+
+Listening to these songs creates a shared physiological and mood experience of gradual escalation followed by steady, soothing calm, enhancing your overall comfort and focus.
+
+######################################################################
+# SONG 31
+######################################################################
+
+----- LAYER 1: DETERMINISTIC TEMPLATE -----
+=================================================================
+🎵  QUERY: Song ID 31
+=================================================================
+  Emotion Region  : High Arousal / Low Valence (LVHA)
+  Arousal         : high (0.606)
+  Valence         : negative (0.397)
+  Physiology      : elevated electrodermal activity (minimal SCR activity, rising trend, high-arousal ratio=86%)
+
+🎯  PROTOTYPE ACTIVATION PROFILE (ante-hoc)
+-----------------------------------------------------------------
+  Cosine similarity of the query to each emotion-quadrant centroid
+  (the 4 prototypes are the mean latent of each Russell quadrant):
+    LVHA (Tense/Angry) : +0.7781  ◄ best match
+    LVLA (Sad) : +0.7201
+    HVHA (Happy/Energetic) : +0.7041
+    HVLA (Calm) : +0.6803
+  → Query most strongly matches the LVHA (Tense/Angry) prototype.
+
+📋  RETRIEVAL EXPLANATION
+-----------------------------------------------------------------
+  Songs retrieved via cosine similarity in the emotion-aware latent space of the MERT-based Hybrid model (Weighted Layer Fusion + SupCR loss). Query occupies 'LVHA' — intense and negative affective region.
+
+🔍  TOP-5 RETRIEVED SONGS
+-----------------------------------------------------------------
+  ┌─ Rank 1 | Song ID 895 (cosine sim = 0.9925)
+  │  Quadrant     : LVHA (intense and negative)
+  │  Arousal      : high (0.620)
+  │  Valence      : neutral (0.492)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=50%)
+  │  Δ from query : valence ↑0.10 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 2 | Song ID 445 (cosine sim = 0.9924)
+  │  Quadrant     : LVHA (intense and negative)
+  │  Arousal      : high (0.563)
+  │  Valence      : negative (0.429)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=27%)
+  │  Δ from query : identical emotion coordinates
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 3 | Song ID 757 (cosine sim = 0.9911)
+  │  Quadrant     : LVHA (intense and negative)
+  │  Arousal      : high (0.648)
+  │  Valence      : negative (0.317)
+  │  Physiology   : moderate electrodermal activity (minimal SCR activity, rising trend, high-arousal ratio=29%)
+  │  Δ from query : valence ↓0.08 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 4 | Song ID 588 (cosine sim = 0.9901)
+  │  Quadrant     : HVHA (energetic and positive)
+  │  Arousal      : high (0.690)
+  │  Valence      : very positive (0.825)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=28%)
+  │  Δ from query : arousal ↑0.08, valence ↑0.43 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 5 | Song ID 966 (cosine sim = 0.9886)
+  │  Quadrant     : LVHA (intense and negative)
+  │  Arousal      : moderate (0.549)
+  │  Valence      : negative (0.413)
+  │  Physiology   : low electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=13%)
+  │  Δ from query : arousal ↓0.06 vs query
+  └─────────────────────────────────────────────────────────
+
+🧠  MUSIC-THEORETIC SUMMARY
+-----------------------------------------------------------------
+  avg neighbor arousal=0.614 | valence=0.495 | mean cosine sim=0.9909
+  Mood arc options (Δarousal = 0.14): Energizing order → [966, 445, 895, 757, 588] (low to high arousal, builds energy). Wind-down order → [588, 757, 895, 445, 966] (high to low arousal, eases into calm).
+=================================================================
+
+----- LAYER 2: LLM EXPLANATION -----
+These tracks share the same raw, high-tension energy — music that hits hard without softening the edges. They're perfect for those seeking cathartic releases and intense moments that don't shy away from confronting uncomfortable emotions head-on. These songs all reside in the upper right corner of the V-A plane, where high arousal and negative valence coexist, providing the perfect soundtrack for navigating intense feelings. 
+
+The physiology of listeners shows a consistent pattern of high arousal and gradual escalation, reflecting the relentless urgency and darkness these songs convey. In your quest for such visceral experiences, you'll find these tracks offer a powerful blend of tension and intensity that resonates deeply with your emotional needs.
+
+These others, while sharing some traits, fall short in creating the cohesive physiological and emotional journey. Their melodic or mellow qualities simply can’t match the raw power of the songs we've selected.
+
+######################################################################
+# SONG 894
+######################################################################
+
+----- LAYER 1: DETERMINISTIC TEMPLATE -----
+=================================================================
+🎵  QUERY: Song ID 894
+=================================================================
+  Emotion Region  : Low Arousal / Low Valence (LVLA)
+  Arousal         : low (0.324)
+  Valence         : negative (0.317)
+  Physiology      : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=36%)
+
+🎯  PROTOTYPE ACTIVATION PROFILE (ante-hoc)
+-----------------------------------------------------------------
+  Cosine similarity of the query to each emotion-quadrant centroid
+  (the 4 prototypes are the mean latent of each Russell quadrant):
+    LVHA (Tense/Angry) : +0.7100  ◄ best match
+    LVLA (Sad) : +0.6924
+    HVLA (Calm) : +0.6172
+    HVHA (Happy/Energetic) : +0.5828
+  → Query most strongly matches the LVHA (Tense/Angry) prototype.
+
+📋  RETRIEVAL EXPLANATION
+-----------------------------------------------------------------
+  Songs retrieved via cosine similarity in the emotion-aware latent space of the MERT-based Hybrid model (Weighted Layer Fusion + SupCR loss). Query occupies 'LVLA' — melancholic and subdued affective region.
+
+🔍  TOP-5 RETRIEVED SONGS
+-----------------------------------------------------------------
+  ┌─ Rank 1 | Song ID 531 (cosine sim = 0.9950)
+  │  Quadrant     : LVLA (melancholic and subdued)
+  │  Arousal      : very low (0.155)
+  │  Valence      : very negative (0.222)
+  │  Physiology   : low electrodermal activity (minimal SCR activity, rising trend, high-arousal ratio=16%)
+  │  Δ from query : arousal ↓0.17, valence ↓0.10 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 2 | Song ID 63 (cosine sim = 0.9946)
+  │  Quadrant     : LVLA (melancholic and subdued)
+  │  Arousal      : low (0.324)
+  │  Valence      : negative (0.429)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=45%)
+  │  Δ from query : valence ↑0.11 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 3 | Song ID 532 (cosine sim = 0.9944)
+  │  Quadrant     : LVHA (intense and negative)
+  │  Arousal      : moderate (0.507)
+  │  Valence      : negative (0.270)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=29%)
+  │  Δ from query : arousal ↑0.18 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 4 | Song ID 440 (cosine sim = 0.9926)
+  │  Quadrant     : LVLA (melancholic and subdued)
+  │  Arousal      : very low (0.239)
+  │  Valence      : very negative (0.206)
+  │  Physiology   : low electrodermal activity (several SCR peaks, rising trend, high-arousal ratio=4%)
+  │  Δ from query : arousal ↓0.08, valence ↓0.11 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 5 | Song ID 943 (cosine sim = 0.9918)
+  │  Quadrant     : LVHA (intense and negative)
+  │  Arousal      : high (0.606)
+  │  Valence      : neutral (0.460)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=29%)
+  │  Δ from query : arousal ↑0.28, valence ↑0.14 vs query
+  └─────────────────────────────────────────────────────────
+
+🧠  MUSIC-THEORETIC SUMMARY
+-----------------------------------------------------------------
+  avg neighbor arousal=0.366 | valence=0.317 | mean cosine sim=0.9937
+  Mood arc options (Δarousal = 0.45): Energizing order → [531, 440, 63, 532, 943] (low to high arousal, builds energy). Wind-down order → [943, 532, 63, 440, 531] (high to low arousal, eases into calm).
+=================================================================
+
+----- LAYER 2: LLM EXPLANATION -----
+These tracks occupy the same quiet, heavy emotional space — music that sits with you, not against you. Each song we've selected resonates deeply with your reflective and introspective mood, offering a gentle yet profound accompaniment as you process your feelings of melancholy and nostalgia. The melancholic and subdued quality of these songs aligns perfectly with your emotional landscape, creating an environment where your emotions can be fully expressed without conflict.
+
+These other songs also share the melancholic and subdued emotional space, but they differ in the intensity and positivity of their emotional expression. They might feel too intense or uplifting for your current state, which makes these tracks stand out as the ideal companions in your musical journey. 
+
+The shared physiological experience of these songs creates a calming yet engaging atmosphere, helping to stabilize your emotions and foster a sense of peace and understanding.
+
+######################################################################
+# SONG 282
+######################################################################
+
+----- LAYER 1: DETERMINISTIC TEMPLATE -----
+=================================================================
+🎵  QUERY: Song ID 282
+=================================================================
+  Emotion Region  : High Arousal / High Valence (HVHA)
+  Arousal         : moderate (0.507)
+  Valence         : neutral (0.508)
+  Physiology      : elevated electrodermal activity (minimal SCR activity, rising trend, high-arousal ratio=60%)
+
+🎯  PROTOTYPE ACTIVATION PROFILE (ante-hoc)
+-----------------------------------------------------------------
+  Cosine similarity of the query to each emotion-quadrant centroid
+  (the 4 prototypes are the mean latent of each Russell quadrant):
+    HVLA (Calm) : +0.6871  ◄ best match
+    LVHA (Tense/Angry) : +0.6758
+    LVLA (Sad) : +0.6702
+    HVHA (Happy/Energetic) : +0.6434
+  → Query most strongly matches the HVLA (Calm) prototype.
+
+📋  RETRIEVAL EXPLANATION
+-----------------------------------------------------------------
+  Songs retrieved via cosine similarity in the emotion-aware latent space of the MERT-based Hybrid model (Weighted Layer Fusion + SupCR loss). Query occupies 'HVHA' — energetic and positive affective region.
+
+🔍  TOP-5 RETRIEVED SONGS
+-----------------------------------------------------------------
+  ┌─ Rank 1 | Song ID 697 (cosine sim = 0.9916)
+  │  Quadrant     : LVHA (intense and negative)
+  │  Arousal      : high (0.690)
+  │  Valence      : neutral (0.460)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=32%)
+  │  Δ from query : arousal ↑0.18 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 2 | Song ID 399 (cosine sim = 0.9909)
+  │  Quadrant     : LVHA (intense and negative)
+  │  Arousal      : high (0.592)
+  │  Valence      : negative (0.413)
+  │  Physiology   : moderate electrodermal activity (minimal SCR activity, rising trend, high-arousal ratio=36%)
+  │  Δ from query : arousal ↑0.08, valence ↓0.10 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 3 | Song ID 751 (cosine sim = 0.9903)
+  │  Quadrant     : HVHA (energetic and positive)
+  │  Arousal      : high (0.563)
+  │  Valence      : neutral (0.508)
+  │  Physiology   : low electrodermal activity (several SCR peaks, rising trend, high-arousal ratio=10%)
+  │  Δ from query : arousal ↑0.06 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 4 | Song ID 398 (cosine sim = 0.9900)
+  │  Quadrant     : LVLA (melancholic and subdued)
+  │  Arousal      : low (0.394)
+  │  Valence      : negative (0.397)
+  │  Physiology   : moderate electrodermal activity (minimal SCR activity, rising trend, high-arousal ratio=39%)
+  │  Δ from query : arousal ↓0.11, valence ↓0.11 vs query
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 5 | Song ID 783 (cosine sim = 0.9897)
+  │  Quadrant     : LVLA (melancholic and subdued)
+  │  Arousal      : low (0.437)
+  │  Valence      : negative (0.413)
+  │  Physiology   : moderate electrodermal activity (few SCR peaks, rising trend, high-arousal ratio=39%)
+  │  Δ from query : arousal ↓0.07, valence ↓0.10 vs query
+  └─────────────────────────────────────────────────────────
+
+🧠  MUSIC-THEORETIC SUMMARY
+-----------------------------------------------------------------
+  avg neighbor arousal=0.535 | valence=0.438 | mean cosine sim=0.9905
+  Mood arc options (Δarousal = 0.30): Energizing order → [398, 783, 751, 399, 697] (low to high arousal, builds energy). Wind-down order → [697, 399, 751, 783, 398] (high to low arousal, eases into calm).
+=================================================================
+
+----- LAYER 2: LLM EXPLANATION -----
+If you're drawn to music that gets you moving and feeling alive, these tracks carry that same charge. Each song in our selection is designed to energize your spirit and elevate your mood, offering an intensity and positivity that aligns perfectly with your preferences for high arousal and high valence. 
+
+All the retrieved songs share a high arousal and high valence on the V-A plane, creating an electrifying atmosphere that resonates deeply with your quest for excitement and motivation. 
+
+The rejected songs, which were melancholic and subdued, lack this vibrant energy and high emotional engagement, failing to capture the high arousal and high valence needed to match your lively taste. 
+
+These songs create a shared physiological and mood experience of heightened arousal and positivity, leaving you feeling invigorated and ready to take on any challenge.

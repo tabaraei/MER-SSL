@@ -259,11 +259,13 @@ Query song arrives
 
 ### 5.5 Evaluation Metrics for Phase C
 
-| Metric | Definition | Status |
+| Metric | Definition | Result (test-fold, out-of-sample) |
 | :--- | :--- | :--- |
-| Precision@k (k=5,10,20) | Fraction of top-k neighbors within 0.20 V-A Euclidean radius | To be computed (index rebuild in progress) |
-| Silhouette Score | Quadrant cluster separation in cosine latent space | To be computed |
-| Prototype activation accuracy | % of songs assigned to correct quadrant by max-similarity prototype | To be computed |
+| Precision@k (k=5,10,20) | Fraction of top-k neighbors within 0.20 V-A Euclidean radius | **0.585 / 0.561 / 0.538** (Dual-SSL); 0.576 / 0.569 / 0.547 (MERT) — retrieval validated, well above chance |
+| Silhouette Score | Quadrant cluster separation in cosine latent space | ≈ 0 (Dual +0.003, MERT −0.029) — **not** meaningful separation; emotion is a continuous gradient, not 4 clusters (reported transparently) |
+| Prototype activation accuracy | % of songs assigned to correct quadrant by max-similarity prototype | Pending — part of the 4-centroid ante-hoc profile (next task) |
+
+**How this answers the supervisor's XAI concern:** Precision@k empirically shows the retrieval returns emotionally similar songs (the example-based explanation is grounded in real proximity, not assertion). The near-zero Silhouette is presented honestly — it reflects the continuous nature of affect, and Precision@k is the load-bearing evidence. The forthcoming 4-centroid activation profile will add the explicit "this song is X% similar to each emotion prototype" readout the supervisor requested.
 
 ---
 
@@ -367,9 +369,9 @@ The previous preliminary report (2 weeks ago) presented Phase A results and init
 
 | Task | Priority | Timeline |
 | :--- | :--- | :--- |
-| Rebuild Phase C index with corrected EDA filename format | High | Immediate |
-| Run `evaluate` mode → Precision@k and Silhouette scores | High | Immediate |
-| Implement 4-centroid prototype activation profile at query time | Medium | 1–2 weeks |
+| ~~Rebuild Phase C index with corrected EDA filename format~~ | — | **Done** |
+| ~~Run evaluation → Precision@k and Silhouette scores~~ | — | **Done** (test-fold; P@5≈0.58, Silhouette≈0) |
+| Implement 4-centroid prototype activation profile at query time | High | In progress |
 | Ablation study: which loss components contribute to CCC improvement | Medium | 2 weeks |
 | Learned prototype vectors (ProtoPNet-style ante-hoc, future improvement) | Lower | 3–4 weeks |
 | Thesis writing: Introduction, Related Work, Methodology | High | Ongoing |

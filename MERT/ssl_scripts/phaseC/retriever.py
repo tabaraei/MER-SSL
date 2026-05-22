@@ -14,11 +14,71 @@ import numpy as np
 
 class EmotionRetriever:
 
+    # Russell-quadrant codes → human-readable prototype names.
+    QUAD_NAMES = {
+        "HVHA": "Happy/Energetic",
+        "HVLA": "Calm",
+        "LVHA": "Tense/Angry",
+        "LVLA": "Sad",
+    }
+
     def __init__(self, index):
         self.index   = index
         self.latents = index["latents"]
         self.n       = len(self.latents)
         self._backend = self._build_backend()
+        self.centroids = self._build_centroids()
+
+    # ── Ante-hoc 4-prototype (quadrant centroid) profile ────────────────────
+    @staticmethod
+    def _quad_mask(arousal, valence, code):
+        """Boolean mask of index songs in a given Russell quadrant
+        (ground-truth V-A; same 0.5 cutoffs as the evaluator/explainer)."""
+        hi_a, hi_v = arousal >= 0.5, valence >= 0.5
+        return {
+            "HVHA": hi_v & hi_a,
+            "HVLA": hi_v & ~hi_a,
+            "LVHA": ~hi_v & hi_a,
+            "LVLA": ~hi_v & ~hi_a,
+        }[code]
+
+    def _build_centroids(self):
+        """Mean latent vector per Russell quadrant (the 4 emotion prototypes),
+        L2-normalized so cosine similarity is a dot product. Built from the
+        index latents grouped by ground-truth V-A — computed once at init."""
+        a, v = self.index["arousal"], self.index["valence"]
+        centroids = {}
+        for code in self.QUAD_NAMES:
+            mask = self._quad_mask(a, v, code)
+            if mask.sum() == 0:
+                continue
+            c = self.latents[mask].mean(axis=0)
+            norm = np.linalg.norm(c)
+            centroids[code] = (c / norm if norm > 1e-8 else c).astype(np.float32)
+        print(f"  🎯 Built {len(centroids)} quadrant prototype centroids "
+              f"({', '.join(centroids)})")
+        return centroids
+
+    def prototype_profile(self, query_latent):
+        """Ante-hoc activation profile: cosine similarity of the query to each
+        of the 4 quadrant prototype centroids.
+
+        Returns:
+            {
+              "similarities": {code: cosine_sim, ...},   # all 4 quadrants
+              "best": code,                              # highest-similarity quadrant
+              "best_name": str,                          # human-readable prototype
+            }
+        """
+        q = query_latent.reshape(-1).astype(np.float32)
+        q = q / (np.linalg.norm(q) + 1e-8)
+        sims = {code: float(np.dot(q, c)) for code, c in self.centroids.items()}
+        best = max(sims, key=sims.get) if sims else None
+        return {
+            "similarities": sims,
+            "best": best,
+            "best_name": self.QUAD_NAMES.get(best, "n/a"),
+        }
 
     def _build_backend(self):
         try:

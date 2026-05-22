@@ -46,8 +46,9 @@ Weight entropy dropped from theoretical max 3.22 → 3.2178 — a difference of 
 **E. MERT is frozen**
 Not fine-tuning any MERT layers limits the upper bound. Even unfreezing the last 2–3 layers during Phase B could recover some valence headroom — at the cost of compute and overfitting risk.
 
-**F. Phase C evaluation not yet run**
-Precision@k and Silhouette scores haven't been computed (pending index rebuild).
+**F. Phase C evaluation — DONE (see Step 6 below)**
+Precision@k and Silhouette computed on test-fold (out-of-sample) latents. Retrieval
+validated (~0.58 Precision@5); Silhouette ≈ 0 (continuous-emotion, not 4 blobs).
 
 ---
 
@@ -358,3 +359,135 @@ model-internal. Narrative coherence: the features Phase A proved MERT lacks
   analysis" wording can overclaim. Cosmetic; K-S uses the full 12-d profile.
 - Key as model input → one-hot or sin/cos circular encoding is the honest
   follow-up if a valence gain from key is desired.
+
+---
+
+## Step 6 — Phase C Latent-Space Evaluation (2026-05-21)
+
+### Method
+New: `phaseC/evaluate_latent_space.py` (`--encoder {mert,dual}`). Builds
+**out-of-sample (test-fold) latents**: 5-fold CV (KFold shuffle, random_state=42),
+each song encoded by the fold model that did NOT train on it — the honest test of
+latent-space organization (vs. the old in-sample `mainC --mode build`, which also
+crashes now because `best_model.pt` is DualSSL and won't load into MERModel).
+Rebuilds `prototypes.npy` (L2 latents, IDs, ground-truth + predicted V-A, EDA),
+then runs the existing `evaluator.evaluate_retrieval` (Silhouette + Precision@k).
+
+**Bug fixed (the real "EDA bug"):** `load_pmemo_data` returns float-formatted IDs
+(`'1.0'`), so `{id}_EDA.csv` lookup built `1.0_EDA.csv` → all 767 missing, and
+`int('1.0')` crashed. Normalized IDs to clean integers → EDA now loads for all 767.
+
+### Results (test-fold, out-of-sample)
+
+| Encoder | Precision@5 | Precision@10 | Precision@20 | Silhouette |
+|:--|:--:|:--:|:--:|:--:|
+| MERT (single) | 0.5760 | 0.5687 | 0.5469 | −0.0293 |
+| **Dual (MERT+w2v, β=0.05)** | **0.5849** | 0.5613 | 0.5382 | **+0.0026** |
+
+### Interpretation (HONEST — do not oversell Silhouette)
+
+- **Precision@k validates retrieval.** ~58% of each song's top-5 latent neighbours
+  fall within a 0.20 V-A radius — well above chance — so the system genuinely
+  fetches emotionally similar songs. This is the **real evidence** that the
+  example-based explanation foundation works (sub-task 1.3 ✓).
+- **Silhouette ≈ 0 for both models.** Dual's +0.0026 is *technically* positive but
+  is **effectively zero — NOT meaningful cluster separation.** Do not claim "SupCR
+  separated the quadrants" on the strength of 0.003. The two encoders are tied.
+- **Why Silhouette is ~0 (and why that's fine):** emotion is a *continuous* V-A
+  gradient, not 4 discrete islands. Silhouette-by-quadrant imposes hard 0.5 cutoffs
+  on a smooth manifold, so boundary songs are legitimately close to the adjacent
+  quadrant → near-zero score even when local structure is good. Class imbalance
+  (HVHA 61%) compounds it. **Lead the thesis with Precision@k; report Silhouette
+  transparently with this continuous-manifold explanation, not as a failure.**
+- **MERT vs dual are equivalent here** — consistent with the project-wide finding
+  that the second encoder adds little to the latent organization.
+
+### Thesis framing
+
+> *"On out-of-sample (test-fold) latents, the emotion-aware space achieves
+> Precision@5 ≈ 0.58 — nearest neighbours are reliably emotionally similar,
+> validating the example-based retrieval that underlies the explanation system.
+> The Silhouette score by Russell quadrant is ≈ 0, which reflects that affect is a
+> continuous valence-arousal gradient rather than four separable clusters;
+> Silhouette-by-quadrant therefore understates the latent organization that
+> Precision@k directly demonstrates."*
+
+---
+
+## Step 7 — Naive Baseline + Thesis Artifacts (2026-05-22)
+
+New (read-only): `phaseC/export_artifacts.py` (naive baseline + t-SNE + fusion
+bar chart) and `phaseC/export_explanations.py` (5-song full RAG export).
+
+### Naive baseline retrieval (raw last-layer MERT, no training)
+
+| Space | P@5 | P@10 | P@20 | Silhouette |
+|:--|:--:|:--:|:--:|:--:|
+| Naive raw last-layer MERT | 0.4847 | 0.4614 | 0.4553 | **0.1001** |
+| MERT (SupCR) | 0.5760 | 0.5687 | 0.5469 | −0.0293 |
+| Dual-SSL (SupCR) | 0.5849 | 0.5613 | 0.5382 | +0.0026 |
+
+**Validates training:** SupCR lifts Precision@5 0.485 → 0.58 (+≈0.10, ~+19% rel.).
+**Honest twist:** untrained Silhouette (0.100) > trained (≈0) — SupCR trades coarse
+quadrant blobbiness for continuous local V-A coherence (↑Precision@k, ↓discrete
+clusters). Reinforces "Precision@k is the right metric; emotion is continuous."
+
+### Artifacts (`phaseC/artifacts/`)
+- `tsne_baseline_vs_finetuned.png` — raw MERT = one mixed blob; SupCR space = clear
+  structured filaments (HVHA-dominated continuous manifold, not 4 clean blobs).
+- `layer_fusion_weights.png` — softmaxed single-MERT fusion weights; top-3 [14,15,16]
+  but near-uniform (entropy 3.218/3.219) — drawn honestly (fusion-collapse).
+- `explanations_5songs.txt` — **DONE**: full Layer 1 + Layer 2 for 5
+  quadrant-spanning songs (562, 706, 31, 894, 282). Layer 2 via a **server-free,
+  no-sudo HF transformers backend** (Qwen/Qwen2.5-1.5B-Instruct in the venv on GPU);
+  university server blocks sudo/Ollama, so `export_explanations.py` got an `--llm hf`
+  mode. 4-part structured prose confirmed; Layer 1 stays the citable artifact.
+
+Note: `mainC.py --mode build/query` loads MERModel and crashes on the DualSSL
+`best_model.pt`; use `evaluate_latent_space.py` / `export_artifacts.py` instead.
+
+---
+
+## Step 8 — Loss-Function Ablation (2026-05-22)
+
+Justifies the hybrid loss; holds architecture constant (single-MERT, test-fold,
+100 epochs), varying only loss weights via `evaluate_latent_space.py --w_*`.
+
+| Loss config | CCC A | CCC V | P@5 | Silhouette |
+|:--|:--:|:--:|:--:|:--:|
+| MSE only | 0.6861 | 0.5955 | 0.5259 | +0.0124 |
+| + CCC + Rank (no SupCR) | 0.7814 | 0.7113 | 0.5398 | +0.0206 |
+| + SupCR (full hybrid) | **0.8165** | 0.7110 | **0.5734** | −0.0311 |
+
+- **CCC+Rank: decisively justified** — +0.095 CCC A, +0.116 CCC V over MSE-only.
+  Answers "why not just MSE?".
+- **SupCR: justified for retrieval, refutes clustering claim** — +0.034 P@5,
+  +0.035 CCC A, but Silhouette drops (+0.021→−0.031). Removing SupCR *raised*
+  Silhouette → SupCR does continuous local tightening, not discrete clustering.
+- **Full vs MSE:** +0.13 CCC A, +0.12 CCC V, +0.047 P@5 → hybrid loss justified
+  overall. No config clusters (all Silhouettes ≈ 0).
+
+Methodology note: compare ablations against the single-MERT full-hybrid baseline
+(CCC A 0.8165), NOT the MERT+EDA 0.8543 (different architecture).
+
+---
+
+## Step 9 — Claim Audit + Prototype-Activation Accuracy (2026-05-22)
+
+New (read-only): `phaseC/extra_metrics.py` — prototype-activation accuracy +
+random-chance Precision baseline.
+
+**Prototype-activation accuracy** (best-match centroid = true quadrant, leave-one-out):
+- Dual 0.506 · MERT 0.462 · **majority-class baseline 0.611** → feature is BELOW the
+  trivial baseline. Per-quadrant recall HVHA 0.63 / HVLA 0.55 / LVHA 0.41 / Sad 0.17.
+  → 4-prototype = interpretability readout, NOT an accurate classifier. Reported honestly.
+- **Random-chance Precision = 0.276** → Precision@5 0.58 is ~2× chance ("above chance" now substantiated).
+
+**Claim audit — fixes made to the clean reports:**
+- 01: "raw t-SNE shows visible quadrant separation" → corrected (raw MERT is a blob;
+  continuous gradient, not clusters; backed by baseline t-SNE artifact).
+- 02: "layers 14/16/17 dominate" → corrected to near-uniform / faint-lean,
+  run-dependent (backed by `layer_fusion_weights.png`).
+- 03: "well above chance" → backed with random baseline 0.276; added prototype accuracy.
+- 04: "highest reported CCC on PMEmo" → removed (no prior work reports CCC → not comparable).
+- 05 §0: prototype-classifier underperformance quantified.

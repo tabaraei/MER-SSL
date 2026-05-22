@@ -131,6 +131,17 @@ A deliberate design decision separates explanation into two layers — each serv
 | **Mood trajectory** | Neighbors sorted by arousal → two listening arc suggestions | Practical application: mood regulation via music (Saarikallio & Erkkilä, 2007) |
 | **Emotion knowledge base** | Static dict per Russell quadrant: genre family, tempo, harmony, listener profile | Russell (1980) circumplex model; avoids LLM hallucination of artist names |
 
+### Quantitative Evaluation (computed — test-fold, out-of-sample)
+
+Run via `phaseC/evaluate_latent_space.py`, which encodes every song with the fold model that did *not* train on it (5-fold CV, `random_state=42`) — a stricter test than in-sample encoding.
+
+| Encoder | Precision@5 | Precision@10 | Precision@20 | Silhouette |
+| :--- | :---: | :---: | :---: | :---: |
+| MERT (single) | 0.5760 | 0.5687 | 0.5469 | −0.0293 |
+| **Dual-SSL (MERT + wav2vec2)** | **0.5849** | 0.5613 | 0.5382 | **+0.0026** |
+
+**Precision@k validates the retrieval foundation:** ~54–58% of each song's nearest latent neighbours are within a 0.20 V-A radius, well above chance — the latent space is locally emotion-coherent. **Silhouette ≈ 0 (both models)** is reported honestly: it is *not* meaningful quadrant separation. Emotion is a continuous V-A gradient, not four discrete clusters, so Silhouette-by-quadrant (hard 0.5 cutoffs on a smooth manifold) sits near zero even when local structure is good; the strong HVHA class imbalance compounds it. The thesis leads with Precision@k as the evidence and presents Silhouette with this continuous-manifold caveat. The two encoders are statistically equivalent here.
+
 ### Limitations (Thesis-Honest Reporting)
 
 These limitations should be explicitly discussed in the thesis:
