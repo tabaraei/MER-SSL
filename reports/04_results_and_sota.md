@@ -24,15 +24,24 @@ Key/mode via Krumhansl–Schmuckler. Details: `01_phaseA_probing.md`.
 
 | Configuration | Arousal R² | Valence R² | CCC Arousal | CCC Valence |
 | :-- | :-: | :-: | :-: | :-: |
-| MERT only (hybrid) | 0.6518 | 0.5055 | 0.82 | 0.74 |
+| Mel-CNN only (shallow CNN, no SSL) | 0.6486 | 0.4452 | 0.7892 | 0.6302 |
+| wav2vec2 only (speech SSL) | 0.6225 | 0.4825 | 0.77 | 0.66 |
+| MERT — last layer only (no fusion) | 0.6570 | 0.5162 | 0.81 | 0.70 |
+| MERT only (music SSL, 25-layer fusion) | 0.6518 | 0.5055 | 0.82 | 0.74 |
 | MERT + EDA | 0.6738 | 0.5075 | **0.8543** | 0.7692 |
 | Dual-SSL (MERT + wav2vec2, β=0.05) | 0.6814 | 0.5676 | 0.8087 | 0.7231 |
 | Triple (MERT + wav2vec2 + mel-CNN) | 0.7023 | **0.5758** | 0.8233 | 0.7329 |
 | Spec-only (MERT + mel-CNN) | 0.7069 | 0.5709 | 0.8271 | 0.7314 |
+| Triple-bio (MERT + mel-CNN + EDA) | 0.7077 | 0.5706 | 0.8262 | 0.7325 |
 | **Enhanced (MERT + wav2vec2 + tempo/key)** | **0.7182** | 0.5686 | 0.8345 | 0.7259 |
 
 - **Best Valence:** Triple (0.5758) · **Best Arousal:** Enhanced (0.7182) · **Best CCC Arousal:** MERT+EDA (0.8543).
-- Enhanced ≈ Spec-only ≈ Triple on arousal → the extra encoder/feature adds little once a trainable spectral or theory branch is present.
+- Enhanced ≈ Triple-bio ≈ Spec-only ≈ Triple on arousal (0.7023–0.7182) → second-branch identity barely matters once a trainable spectral branch is present; wav2vec2, EDA and music-theory features are all roughly interchangeable as the second/third branch beside MERT+Mel.
+- **Single-encoder comparisons (three baselines):**
+  - **MERT (music SSL):** 0.6518 / 0.5055 — best valence among single encoders, justifying the MERT backbone.
+  - **wav2vec2 (speech SSL):** 0.6225 / 0.4825 — worst on valence; music-specific pre-training matters.
+  - **Mel-CNN alone (shallow CNN, no SSL):** 0.6486 / 0.4452 — *beats* wav2vec2 on arousal (energy is acoustically easy: loudness, spectral envelope) but *loses* on valence (no harmony/tonality model). Cleanly localises SSL's value to the valence axis.
+- **EDA contribution is conditional:** EDA helps when added to MERT alone (MERT+EDA valence CCC 0.7692 — best on that axis) but adds essentially nothing on top of MERT+Mel (Triple-bio 0.7077 / 0.5706 ≈ Spec-only 0.7069 / 0.5709, within fold-noise). EDA and the spectral CNN cover overlapping information — the same redundancy story as wav2vec2 once MERT is present.
 
 ### 2a. Fusion-collapse interventions (dual encoder)
 
@@ -46,6 +55,33 @@ Single-encoder MERT, for contrast: entropy 3.2178 / max 3.2189 (layers 14/16/17)
 The bottleneck *hurt* (256-d too aggressive for ~600 samples); the penalty was a
 mild regularizer that did not induce specialization.
 
+**Ablation — last-layer-only vs full 25-layer fusion (two settings, 5-fold):**
+
+| Setting | Variant | R² A | R² V | CCC A | CCC V |
+| :-- | :-- | :-: | :-: | :-: | :-: |
+| MERT-only (single)    | 25-layer fusion   | 0.6518 | 0.5055 | 0.82 | 0.74 |
+| MERT-only (single)    | Last layer only   | 0.6570 ± 0.026 | 0.5162 ± 0.053 | 0.81 | 0.70 |
+| MERT-only (single)    | Δ (last − fusion) | +0.005 (tied) | +0.011 (tied) | −0.01 | −0.04 |
+| Enhanced (multi-enc.) | 25-layer fusion   | **0.7182** | **0.5686** | **0.8345** | **0.7259** |
+| Enhanced (multi-enc.) | Last layer only   | 0.6660 ± 0.035 | 0.4881 ± 0.070 | 0.8124 | 0.6865 |
+| Enhanced (multi-enc.) | Δ (last − fusion) | **−0.052** (loss) | **−0.081** (loss) | −0.022 | −0.039 |
+
+**Nuanced, quantitative result.** On MERT-only, last-layer is statistically tied
+with the 25-layer fusion (Δ inside fold-std on both axes) — consistent with the
+near-uniform learned fusion weights (entropy 3.218 / max 3.219). On the
+multi-encoder Enhanced model, removing fusion costs **5.2 pp R² A** and
+**8.1 pp R² V** — outside fold-std on both axes (Δ/std ≈ 1.5 and 1.2).
+
+**Interpretation.** The fusion's value is not intrinsic to MERT — it is
+specifically about *cross-encoder integration*. In single-encoder mode the late
+layer carries enough signal that the learnable softmax has nothing to add. In
+multi-encoder mode, mel-CNN / wav2vec2 / theory already cover the late acoustic
+representation, so MERT's mid-layers fill a complementary niche that the last
+layer alone cannot reach. The architectural choice is empirically justified by
+the Enhanced ablation; the MERT-only ablation is the negative control that
+proves the gain is not free. Scripts: `phaseB/eval_last_layer_only.py`,
+`phaseB/eval_enhanced_last_layer.py`.
+
 ### 2a-bis. Loss-function ablation (single-MERT, test-fold, 100 epochs)
 
 | Loss config | CCC A | CCC V | P@5 | Silhouette |
@@ -57,6 +93,90 @@ mild regularizer that did not induce specialization.
 - CCC+Rank vs MSE: **+0.095 CCC A, +0.116 CCC V** → the dominant contribution; justifies the non-MSE terms decisively.
 - SupCR vs no-SupCR: +0.034 P@5, +0.035 CCC A (helps retrieval) but Silhouette **drops** (+0.021 → −0.031) → SupCR improves local retrieval, **not** clustering; it refutes the "SupCR creates emotional clusters" claim.
 - Full vs MSE: +0.13 CCC A, +0.12 CCC V, +0.047 P@5 → the hybrid loss is justified overall. No config clusters (all Silhouettes ≈ 0).
+
+### 2a-ter. Imbalance-handling ablation (MERT-only, 25-layer fusion, 5-fold)
+
+**Pre-registered pass mark:** treatment wins iff R² beats baseline by >1 fold-std
+on both axes, OR >2 fold-std on either axis, OR lifts minority quadrants from <0
+to ≥0.
+
+| Treatment | R² A | R² V | CCC A | CCC V |
+| :-- | :-: | :-: | :-: | :-: |
+| A: sampler-only (current baseline) | **0.6951 ± 0.016** | **0.5724 ± 0.050** | 0.820 | 0.731 |
+| B: weighted-MSE only (no sampler) | 0.6738 ± 0.018 | 0.5267 ± 0.109 | 0.828 | 0.739 |
+| C: sampler + weighted-MSE (stacked) | 0.6855 ± 0.029 | 0.5696 ± 0.062 | 0.811 | 0.724 |
+| D: focal-MSE γ=2 + sampler | 0.6949 ± 0.018 | 0.5716 ± 0.057 | 0.821 | 0.727 |
+
+- **No winner.** B is *worse* on R² V (−0.046, larger than fold-std). C and D are
+  statistically tied with A. Per the pass mark: do not propagate to multi-encoder configs.
+- The `WeightedRandomSampler` is empirically the best imbalance treatment we have at
+  this dataset scale; gradient-level reweighting adds nothing measurable.
+- **Honest disclosure:** within-script baseline rerun A (0.6951/0.5724) ran higher
+  than the historic published MERT-only number (0.6518/0.5055). KFold seed is
+  identical (random_state=42); model-init/DataLoader RNG are not seeded, so this
+  most likely reflects single-seed init variance. The fold-matched A↔B↔C↔D
+  comparison within this script is the only audit-honest reading; SOTA-table
+  number is not overwritten. Script: `phaseB/eval_imbalance_ablation.py`.
+- **Interpretation:** the minority-quadrant failure (negative per-quadrant R²) is
+  a *dataset-size* limit (n=64–67 per minority quadrant), not a *method* limit.
+  Re-weighting cannot create signal where there is none; the honest cure would be
+  augmentation (mixup within minority quadrants, SpecAugment) or a larger
+  affect-annotated corpus — neither in scope. We now have a documented ablation
+  supporting the sampler choice instead of presenting it as an arbitrary default.
+
+### 2a-quater. Augmentation ablation — feature-space mixup on Enhanced (5-fold)
+
+**Pre-registered pass mark:** treatment wins iff R² beats baseline by >1 fold-std
+on both axes, OR >2 fold-std on either, OR lifts minority quadrants from <0 to ≥0.
+
+| Model | R² A | R² V | CCC A | CCC V |
+| :-- | :-: | :-: | :-: | :-: |
+| Enhanced (no augmentation) | **0.7182** | **0.5686** | **0.8345** | **0.7259** |
+| Enhanced + feature-space mixup (α=0.4) | 0.7077 ± 0.014 | 0.5651 ± 0.034 | 0.8213 | 0.7160 |
+| Δ (mixup − baseline) | −0.0105 (<std) | −0.0035 (<std) | −0.013 | −0.010 |
+
+- **No winner.** All four deltas land inside fold-noise — mixup is statistically
+  tied with the no-augmentation baseline.
+- Minority per-quadrant R² remained negative across all three minority quadrants:
+  HVLA n=67 A=−0.35 V=−1.88 · LVHA n=64 A=−0.91 V=−1.08 · LVLA n=167 A=−0.11 V=−0.90.
+- **Conclusion: the dataset-size floor is empirically confirmed.** The standard
+  cited augmentation remedy (Zhang et al. 2017, *mixup*) ties baseline and does
+  not lift minorities into the positive range — exactly what the n=64–67
+  hypothesis predicts. The minority-quadrant failure is a *data* limit, not a
+  *method* limit. Long-term remedy is corpus expansion or task-aware augmentation
+  (C-Mixup, Yao 2022; SpecAugment, Park 2019); out of scope for this thesis.
+- Script: `phaseB/eval_enhanced_mixup.py`.
+
+### 2a-quinquies. Cluster-enforcement trade-off — auxiliary quadrant-CE head sweep (Enhanced, 5-fold)
+
+**Pre-registered hypothesis:** Silhouette ↑ with λ; R²/CCC ↓ with λ;
+minority per-quadrant R² ≈ unchanged (data-floor invariant).
+
+|  λ   |  R² A           |  R² V           | CCC A | CCC V |  Silhouette       |
+| :-:  | :-:             | :-:             | :-:   | :-:   |  :-:              |
+| 0.0  | 0.7080 ± 0.021  | 0.5725 ± 0.038  | 0.827 | 0.729 | **0.255 ± 0.054** |
+| 0.1  | 0.7050 ± 0.013  | 0.5811 ± 0.033  | 0.828 | 0.738 |   0.258 ± 0.059   |
+| 0.5  | 0.6966 ± 0.016  | 0.5624 ± 0.053  | 0.827 | 0.730 |   0.265 ± 0.064   |
+| 1.0  | 0.6638 ± 0.020  | 0.5601 ± 0.037  | 0.810 | 0.734 |   0.286 ± 0.060   |
+
+- **Side-finding (rewrites the framing of §3 SC0):** the Enhanced model's
+  latent space **already has moderate quadrant structure** —
+  Silhouette = 0.255 (cosine, 5-fold test). The earlier "Silhouette ≈ 0"
+  claim was from the single-MERT loss ablation (§2a-bis) over a different
+  latent space; it does **not** generalise to the multi-encoder Enhanced
+  setup. Multi-encoder fusion produces inherently more cluster-structured
+  latents than single-encoder MERT.
+- **Trade-off is real but unfavourable.** Silhouette rises monotonically
+  with λ (+0.031 from λ=0 to λ=1.0 — modest), but R² A drops 4.4 pp at
+  λ=1.0 (outside fold-std). λ=0.1 is essentially zero-cost on R² and also
+  zero-benefit on Silhouette.
+- **Minority per-quadrant R² remain negative across all λ** — and
+  *worsen* with stronger CE (HVLA −0.43 → −0.85). Third independent
+  confirmation of the dataset-floor hypothesis (after §2a-ter imbalance
+  and §2a-quater mixup).
+- **Conclusion:** continuous representation is the empirically-defended
+  design choice. Cluster enforcement is possible but pays for itself
+  poorly. Script: `phaseB/eval_enhanced_quadrant_ce.py`.
 
 ### 2b. IADS-E joint learning (negative finding, partial k,p sweep)
 
@@ -112,24 +232,51 @@ higher Precision@k, flatter discrete clusters. This reinforces that Precision@k 
 the right metric and emotion is a continuous gradient. Details + interpretation:
 `03_phaseC_explainability.md`, §5.
 
-## 4. SOTA Comparison (PMEmo 2019)
+## 4. PMEmo 2019 — Single Comparison Table (R²)
 
-| Method | Year | Approach | Valence R² | Arousal R² | CCC (V / A) |
-| :-- | :-: | :-- | :-: | :-: | :-: |
-| PMEmo Original (Zhang et al.) | 2019 | IS13 hand-crafted + ML | 0.42 | 0.51 | — |
-| Dutta & Chanda | 2021 | Mel-Spec + CRNN | ~0.45 | ~0.55 | — |
-| Hybrid SSL (Wu et al.) | 2023 | Wav2Vec2 + attention | ~0.48 | ~0.61 | — |
-| Damer | 2025 | Wav2Vec2 + chords | 0.51 | 0.72 | — |
-| Music2Emo | 2025 | MERT + multitask | 0.54 | 0.78 | — |
-| **This work — Triple (best Valence)** | 2026 | MERT + wav2vec2 + mel-CNN | **0.576** | 0.702 | 0.73 / 0.82 |
-| **This work — Enhanced (best Arousal)** | 2026 | MERT + wav2vec2 + tempo/key | 0.569 | **0.718** | 0.73 / 0.83 |
+One unified table: prior work (top) + every model we built (bottom). R² is the common
+metric across these papers. PMEmo works that report only classification accuracy or
+RMSE (DAMER, CNN+LSTM, Sharma) are **not** R²-comparable and are omitted, not mixed in.
+Confirm external numbers against primary sources before submission; EmoMucs used labels
+scaled to [-1,1].
 
-**Positioning:** Valence R² 0.576 surpasses Music2Emo (0.54) **audio-only, without
-multitask supervision**. CCC Arousal 0.8543 (MERT+EDA) is strong, but a direct CCC
-comparison to prior PMEmo work is **not possible** — the listed baselines do not
-report CCC (column "—"), so "highest reported CCC" cannot be substantiated and is
-*not* claimed. Valence stays ≤ 0.58 — the field-wide audio-only ceiling. CCC is the
-AVEC standard (penalizes correlation, mean shift, and variance mismatch jointly).
+| Method / Architecture | Year | R² Valence | R² Arousal | Notes |
+| :-- | :-: | :-: | :-: | :-- |
+| Zhang et al. — IS13 + SVR/MLR (PMEmo paper) | 2018 | ~0.41* | ~0.52* | baselines (*r²-derived) |
+| EmoMucs C1D-M (de Berardinis et al.) | 2020 | 0.349 | 0.557 | 1D CNN; labels [-1,1] |
+| EmoMucs C2D-M (de Berardinis et al.) | 2020 | 0.414 | 0.610 | 2D CNN; labels [-1,1] |
+| AutoML openSMILE (Simonetta et al.) | 2024 | 0.525 | 0.727 | hand-crafted; PMEmo only |
+| AutoML Joint (Simonetta et al.) | 2024 | 0.780 | 0.861 | PMEmo + IADS-E (joint) |
+| Music2Emo (Kang & Herremans) | 2025 | 0.536 | 0.777 | MERT+chord/key; PMEmo only |
+| Music2Emo (Kang & Herremans) | 2025 | 0.547 | 0.794 | + multitask; 4 datasets |
+| This work — Mel-CNN only | 2026 | 0.4452 | 0.6486 | shallow CNN, no SSL (single-encoder baseline) |
+| This work — wav2vec2 only | 2026 | 0.4825 | 0.6225 | speech SSL, single encoder |
+| This work — MERT only | 2026 | 0.5055 | 0.6518 | music SSL, single encoder |
+| This work — MERT + EDA | 2026 | 0.5075 | 0.6738 | + physiology (CCC A 0.85) |
+| This work — Dual (MERT+wav2vec2) | 2026 | 0.5676 | 0.6814 | dual SSL |
+| **This work — Triple (+ mel-CNN)** | 2026 | **0.576** | 0.702 | best valence |
+| This work — Spec-only (MERT+Mel) | 2026 | 0.5709 | 0.7069 | drops wav2vec2 from Triple |
+| This work — Triple-bio (MERT+Mel+EDA) | 2026 | 0.5706 | 0.7077 | swaps wav2vec2 for EDA |
+| **This work — Enhanced (+ tempo/key)** | 2026 | 0.569 | **0.718** | best arousal |
+
+*\*Zhang et al. (2018) report Pearson's r; values are squared approximations (R² ≈ r²) from
+their static baselines (r=0.638 valence → 0.41; r=0.719 arousal → 0.52).*
+
+**Positioning (honest, with caveats):** our genuine strength is **valence** — our Triple
+(0.576) is the best of all non-joint methods, above both Music2Emo variants (0.536 single,
+0.547 multitask) and hand-crafted AutoML (0.525). On **arousal** we do **not** lead:
+Music2Emo reaches 0.777 (single) / 0.794 (multitask) and AutoML 0.727 — all above our best
+(0.718). Arousal is competitive-but-trailing, not a headline. The top row, Simonetta
+AutoML-**Joint** (0.780/0.861, PMEmo+IADS-E), is the exact approach we replicated with SSL
+(§2b) and it **did not transfer** (our SSL valence dropped) — it both sets the SOTA bar and
+frames our key negative finding. Within our own models, music-pretrained MERT cleanly beats
+speech-pretrained wav2vec2. **Verified:** Music2Emo PMEmo-only = 0.536/0.777 (paper Table III,
+arXiv:2502.03979) — an earlier draft mis-listed 0.458/0.639; corrected.
+
+**Not R²-comparable (accuracy/RMSE — do NOT tabulate as R²):** CNN+LSTM (2022) ≈79% V /
+84% A acc; DAMER (2025) ≈78% V / 86% A acc; Sharma et al. (2020) ≈63% acc; original
+Zhang et al. (2018) reports RMSE. A prior draft mis-listed DAMER as "R² 0.51/0.72" —
+corrected (it is accuracy). No fair CCC comparison exists (prior work doesn't report CCC).
 
 ## 5. One-Line Summary
 

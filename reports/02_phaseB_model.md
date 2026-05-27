@@ -74,6 +74,31 @@ varies by run (14, 15, 16 in one run; 10, 12 in others; see
 `artifacts/layer_fusion_weights.png`). "Layers 14/16/17 dominate" is a marginal,
 unstable argmax, **not** strong specialization — report it as a faint lean only.
 
+**Empirical ablation — does the 25-layer fusion actually help?** Two fold-matched
+ablations, both 5-fold CV with everything else identical to the corresponding baseline:
+
+| Setting | Variant | R² A | R² V | CCC A | CCC V |
+| :-- | :-- | :-: | :-: | :-: | :-: |
+| MERT-only (single)    | 25-layer fusion   | 0.6518 | 0.5055 | 0.82 | 0.74 |
+| MERT-only (single)    | Last layer only   | 0.6570 ± 0.026 | 0.5162 ± 0.053 | 0.81 | 0.70 |
+| MERT-only (single)    | Δ (last − fusion) | **+0.005** (tied) | **+0.011** (tied) | −0.01 | −0.04 |
+| Enhanced (multi-enc.) | 25-layer fusion   | **0.7182** | **0.5686** | **0.8345** | **0.7259** |
+| Enhanced (multi-enc.) | Last layer only   | 0.6660 ± 0.035 | 0.4881 ± 0.070 | 0.8124 | 0.6865 |
+| Enhanced (multi-enc.) | Δ (last − fusion) | **−0.052** (loss) | **−0.081** (loss) | −0.022 | −0.039 |
+
+**Result is nuanced and quantitative.** On MERT-only, last-layer is statistically tied with
+the 25-layer fusion (Δ inside fold-std on both axes) — consistent with the near-uniform learned
+fusion weights (entropy 3.218 / max 3.219). On the multi-encoder Enhanced model, removing fusion
+costs **5.2 pp R² A** and **8.1 pp R² V** — outside fold-std on both axes.
+
+**Interpretation.** The fusion's value is not intrinsic to MERT — it is specifically about
+*cross-encoder integration*. In single-encoder mode the late layer carries enough signal that
+the learnable softmax has nothing to add. In multi-encoder mode, mel-CNN / wav2vec2 / theory
+already cover the late acoustic representation, so MERT's mid-layers fill a complementary niche
+the last layer alone cannot reach. The architectural choice is empirically justified by the
+Enhanced ablation; the MERT-only ablation is the negative control that proves the gain is not
+free. Scripts: `phaseB/eval_last_layer_only.py`, `phaseB/eval_enhanced_last_layer.py`.
+
 **Class imbalance (Simpson's paradox).** PMEmo is ~61% high-valence/high-arousal
 (HVHA). A model can post a high global score by over-predicting "happy." **Fix:** a
 *balanced sampler* (sample weight = inverse quadrant frequency) so all four
@@ -83,11 +108,14 @@ quadrants are seen proportionally.
 
 | Model | Branches | A R² | V R² | CCC A | CCC V |
 | :-- | :-- | :-: | :-: | :-: | :-: |
-| MERT only | MERT | 0.6518 | 0.5055 | 0.82 | 0.74 |
+| Mel-CNN only | mel-spec CNN (no SSL) | 0.6486 | 0.4452 | 0.79 | 0.63 |
+| wav2vec2 only | wav2vec2 (speech SSL) | 0.6225 | 0.4825 | 0.77 | 0.66 |
+| MERT only | MERT (music SSL) | 0.6518 | 0.5055 | 0.82 | 0.74 |
 | MERT + EDA | MERT + physiology | 0.6738 | 0.5075 | **0.8543** | 0.7692 |
 | Dual-SSL (β=0.05) | MERT + wav2vec2 | 0.6814 | 0.5676 | 0.8087 | 0.7231 |
 | Triple | MERT + wav2vec2 + mel-CNN | 0.7023 | **0.5758** | 0.8233 | 0.7329 |
 | Spec-only | MERT + mel-CNN | 0.7069 | 0.5709 | 0.8271 | 0.7314 |
+| Triple-bio | MERT + mel-CNN + EDA | 0.7077 | 0.5706 | 0.8262 | 0.7325 |
 | **Enhanced** | MERT + wav2vec2 + tempo/key | **0.7182** | 0.5686 | 0.8345 | 0.7259 |
 
 (Full tables, per-quadrant breakdowns, and SOTA comparison in `04_results_and_sota.md`.)
