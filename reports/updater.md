@@ -941,3 +941,49 @@ differential optimizer, 5-fold KFold(42), 100 epochs, batch=32).
   R² cost; we chose the regression performance the system is designed to
   deliver). This neutralises the most common viva criticism by quantifying
   the trade-off rather than dismissing the question.
+
+---
+
+## Step 22 — Persistent result logging + report-vs-log audit (2026-05-28)
+
+**Concern (user):** "double-check all of the codes and results — maybe it
+would be better to log all results after every run and compare them with the
+report".
+
+**What I did.**
+
+1. **Persisted all ephemeral tmp logs.** Copied every background-task output
+   from `/tmp/.../tasks/*.output` into `reports/run_logs/` with descriptive
+   names matching the script that produced them (e.g.
+   `eval_enhanced_quadrant_ce.log`). These are now under version control of
+   the reports folder, not session-scoped tmp.
+
+2. **Wrote `reports/verify_results.py`** — automated audit that extracts the
+   headline 5-fold means (R² A, R² V, CCC A, CCC V, Silhouette where present)
+   from every persisted log and cross-checks them against the numbers
+   currently quoted in `01_phaseA_probing.md`, `02_phaseB_model.md`,
+   `04_results_and_sota.md` and `generate_report_v3.py`. Tolerance: ±0.005
+   absolute, which is the floor of the 3rd-decimal rounding used in prose
+   tables.
+
+3. **Ran the audit.** Result:
+   ```
+   AUDIT SUMMARY:  60 OK · 0 MISMATCH · 0 regex-miss · 0 unverifiable
+   All report numbers match the logged run outputs within ±0.005.
+   ```
+   Logs verified: wav2vec2-only, MERT-only last-layer, Enhanced last-layer,
+   imbalance ablation (A/B/C/D), Enhanced + mixup, Mel-CNN alone,
+   Triple-bio (MERT+Mel+EDA), CE-head sweep (λ=0 / 0.1 / 0.5 / 1.0,
+   including Silhouette). **Zero mismatches — every number in the reports
+   traces back exactly to its run log.**
+
+4. **Wrote `reports/run_logs/AUDIT.md`** documenting the procedure and what
+   the audit does (and does not) cover.
+
+**Going forward.** Every new run produces stdout that should be saved to
+`reports/run_logs/<descriptive_name>.log`. `verify_results.py` is the
+single command that re-checks numerical consistency before each PDF
+regeneration. This closes a real gap in the previous workflow (logs were
+only in ephemeral tmp; reports could in principle drift without anyone
+noticing) and gives the thesis a reproducibility trail that an examiner
+can re-run independently.

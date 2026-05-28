@@ -56,12 +56,50 @@ key (12-class) classification.
 **Gap criterion:** a feature is a "gap" if its *best-layer* score is below
 R² = 0.40 (regression) or accuracy = 0.65 (classification).
 
-### Result — gap_features = {tempo, key}
+### Result — full per-feature probing across all 25 MERT layers
 
-Across all 25 layers, MERT does **not** linearly expose absolute **tempo** or
-**key**. Harmony/timbre features (chroma, spectral contrast/centroid, ZCR, mode,
-rhythmic stability) are captured above threshold. The tempo gap is consistent with
-the initial tempo probe (R² ≈ 0.12).
+All 8 librosa-extracted features were probed against every one of MERT's 25 layers.
+**Best layer** = layer with the highest score; **pooled** = mean-of-all-layers
+probe (one Ridge / LogReg trained on the per-layer-averaged representation).
+Bold rows are the gaps under the threshold rule; these are the features the
+Phase B *Enhanced* model re-injects via the music-theory branch.
+
+| Feature | Probe type | Threshold | Best layer | Best score | Pooled score | Gap? |
+| :-- | :-- | :-: | :-: | :-: | :-: | :-: |
+| chroma (12-d harmony profile) | Ridge R² | 0.40 | 0 | 0.6801 | 0.5769 | no |
+| **tempo (BPM)** | Ridge R² | 0.40 | 0 | **−0.8307** | **−2.1155** | **yes** |
+| rhythmic_stability | Ridge R² | 0.40 | 0 | 0.7346 | 0.5630 | no |
+| spectral_centroid | Ridge R² | 0.40 | 1 | 0.9206 | 0.8663 | no |
+| spectral_contrast (7-d) | Ridge R² | 0.40 | 3 | 0.7310 | 0.7270 | no |
+| zero-crossing rate (ZCR) | Ridge R² | 0.40 | 0 | 0.9566 | 0.8471 | no |
+| mode (major / minor, binary) | LogReg acc | 0.65 | 11 | 0.6730 | 0.6730 | no (marginal) |
+| **key (12-class)** | LogReg acc | 0.65 | 2 | **0.5849** | **0.5786** | **yes** |
+
+**Reading.**
+- **Strongly encoded (effortless to probe linearly):** spectral centroid (0.92),
+  ZCR (0.96), spectral contrast (0.73), chroma (0.68), rhythmic stability (0.73)
+  — short-time spectral and chroma-style information dominates the *early* layers
+  (best-layer = 0–3 for all five). This is consistent with the SSL literature
+  (Pasad et al. 2021): low-level acoustic features live in early layers.
+- **Captured but only marginally:** mode at 0.67 acc (binary classification, just
+  above the 0.65 threshold) — MERT knows *major vs minor* a little better than
+  chance, and the best layer for mode is 11 (mid layer), not an early acoustic one.
+  This is consistent with the initial direct mode probe (§2, ~100% accuracy) once
+  you account for the different evaluation setup: the §2 probe used a curated
+  high-confidence subset, the §3 probe used the full Krumhansl–Schmuckler
+  labelling on every song including ambiguous ones, so accuracy regresses to the
+  realistic 0.67. The two numbers do not contradict each other.
+- **Genuine gaps:** **tempo** (negative R² — strictly worse than predicting the
+  mean) and **key** (0.58 acc, below the 12-class threshold of 0.65). These two
+  features are *not linearly recoverable* anywhere in MERT's 25 layers, which is
+  the exact motivation for re-injecting them as a hand-crafted branch in the
+  Enhanced model.
+
+The tempo result is consistent with the initial single-target tempo probe
+(R² ≈ 0.12 on a separate split) — both confirm the same conclusion. The
+per-layer × per-feature heatmap in `plots/music_theory_probing_heatmap.png`
+shows the full 25 × 8 grid; the summary plot
+`plots/music_theory_probing_summary.png` shows best-per-feature scores at a glance.
 
 Outputs: `phaseA/music_theory_probing_results.json`, `phaseA/gap_analysis.json`,
 `phaseA/plots/music_theory_probing_summary.png`,

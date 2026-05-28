@@ -1,0 +1,35 @@
+Device: cuda | Enhanced LAST-LAYER-ONLY ablation (MERT + w2v2 + theory)
+  ✅ Enhanced matched 767 songs | gap_vec dim=2 (['tempo', 'key'])
+  After slicing: X_mert=(767, 1, 1024) | X_w2v=(767, 1, 768) | X_theory=(767, 2) | gap_features=['tempo', 'key']
+  ── Fold 1/5 ──
+     R² A=0.6624 V=0.3608 | CCC A=0.8143 V=0.6117
+  ── Fold 2/5 ──
+     R² A=0.6027 V=0.5518 | CCC A=0.7894 V=0.7174
+  ── Fold 3/5 ──
+     R² A=0.6847 V=0.5263 | CCC A=0.8201 V=0.7031
+  ── Fold 4/5 ──
+     R² A=0.7054 V=0.4675 | CCC A=0.8289 V=0.6820
+  ── Fold 5/5 ──
+     R² A=0.6746 V=0.5340 | CCC A=0.8093 V=0.7185
+
+================================================================
+  ENHANCED LAST-LAYER-ONLY — 5-FOLD AVERAGE
+================================================================
+  R²  Arousal : 0.6660 ± 0.0346
+  R²  Valence : 0.4881 ± 0.0697
+  CCC Arousal : 0.8124
+  CCC Valence : 0.6865
+
+  Per-quadrant R²:
+    HVHA (Happy): A=0.136  V=-0.247  n=469
+    HVLA (Calm): A=-0.782  V=-2.920  n=67
+    LVHA (Angry): A=-1.144  V=-2.525  n=64
+    LVLA (Sad): A=-0.404  V=-1.277  n=167
+
+  COMPARISON
+  Model                                A R²     V R²    CCC A    CCC V
+  ----------------------------------------------------------------
+  Enhanced (25-layer fusion)         0.7182   0.5686   0.8345   0.7259
+  Enhanced (last-layer only)         0.6660   0.4881   0.8124   0.6865
+  Δ (last - fusion)                 -0.0522  -0.0805  -0.0221  -0.0394
+  (fold-std on R² A = 0.0346, R² V = 0.0697; |Δ| > std → outside fold-noise on that axis)

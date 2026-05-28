@@ -98,12 +98,31 @@ s.append(Paragraph(
 # ── 2. Phase A ──
 s.append(Paragraph("2. Phase A — What MERT Already Knows", H1))
 s.append(Paragraph(
-    "A linear probe shows MERT strongly encodes <b>harmonic mode</b> (major/minor, ~100% accuracy) "
-    "but only weakly encodes <b>tempo</b> (R² = 0.12). A full probe of all 25 layers against 8 "
-    "music-theory features found that the model fails to expose two things linearly: <b>tempo and key</b>. "
-    "These two 'gaps' later guided Phase B. Honest correction: the raw MERT space does <b>not</b> form "
-    "clean emotion clusters in a t-SNE plot — it is one mixed blob (Fig. 1, left); emotion is present "
-    "but spread out continuously, not separated into groups.", BODY))
+    "I ran a linear probe (Ridge or Logistic Regression) on every one of MERT's 25 layers against "
+    "<b>8 librosa-extracted music-theory features</b>. A feature is flagged as a <b>gap</b> if its "
+    "best-layer score falls below R² = 0.40 (regression) or accuracy = 0.65 (classification). "
+    "Full results below — bold rows are the gaps that later drove the Phase B <i>Enhanced</i> branch.", BODY))
+pa = [[hdr("Feature"), hdr("Probe"), hdr("Threshold"), hdr("Best layer"), hdr("Best score"), hdr("Pooled"), hdr("Gap?")],
+      [cell("chroma (12-d)"),                 cell("Ridge R²", center=True), cell("0.40", center=True), cell("0", center=True),  cell("0.6801", center=True), cell("0.5769", center=True), cell("no", center=True)],
+      [cell("tempo (BPM)", bold=True),        cell("Ridge R²", center=True), cell("0.40", center=True), cell("0", center=True),  rc("−0.8307"), rc("−2.1155"), rc("yes")],
+      [cell("rhythmic_stability"),            cell("Ridge R²", center=True), cell("0.40", center=True), cell("0", center=True),  cell("0.7346", center=True), cell("0.5630", center=True), cell("no", center=True)],
+      [cell("spectral_centroid"),             cell("Ridge R²", center=True), cell("0.40", center=True), cell("1", center=True),  cell("0.9206", center=True), cell("0.8663", center=True), cell("no", center=True)],
+      [cell("spectral_contrast (7-d)"),       cell("Ridge R²", center=True), cell("0.40", center=True), cell("3", center=True),  cell("0.7310", center=True), cell("0.7270", center=True), cell("no", center=True)],
+      [cell("zero-crossing rate"),            cell("Ridge R²", center=True), cell("0.40", center=True), cell("0", center=True),  cell("0.9566", center=True), cell("0.8471", center=True), cell("no", center=True)],
+      [cell("mode (major/minor)"),            cell("LogReg acc", center=True), cell("0.65", center=True), cell("11", center=True), cell("0.6730", center=True), cell("0.6730", center=True), cell("no (marginal)", center=True)],
+      [cell("key (12-class)", bold=True),     cell("LogReg acc", center=True), cell("0.65", center=True), cell("2", center=True),  rc("0.5849"), rc("0.5786"), rc("yes")]]
+tpa = Table(pa, colWidths=[TW*0.20, TW*0.13, TW*0.11, TW*0.10, TW*0.14, TW*0.14, TW*0.13]); tpa.setStyle(tstyle()); s.append(tpa)
+s.append(Spacer(1, 0.1*cm))
+s.append(Paragraph(
+    "<b>Reading.</b> Short-time spectral / chroma information (spectral centroid, ZCR, spectral "
+    "contrast, chroma, rhythmic stability) is <b>strongly encoded</b> and lives in MERT's <i>early</i> "
+    "layers (best-layer = 0–3) — consistent with the SSL hierarchy literature (Pasad et al. 2021). "
+    "Mode (major / minor) is captured marginally (best-layer 11, accuracy 0.67 — just above the binary "
+    "threshold). Tempo and key are <b>genuine gaps</b>: not linearly recoverable from any of the 25 "
+    "layers. The Phase B <i>Enhanced</i> model re-injects exactly these two features through a small "
+    "hand-crafted music-theory branch — a Phase-A-driven architectural choice, not a guess. "
+    "<b>Honest framing of the t-SNE:</b> the raw MERT latent space is one mixed blob (Fig. 1, left); "
+    "emotion is present but continuously distributed, not separated into clusters.", BODY))
 
 # ── 3. Phase B ──
 s.append(Paragraph("3. Phase B — Emotion Prediction (all settings)", H1))
