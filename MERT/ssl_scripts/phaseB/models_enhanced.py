@@ -24,12 +24,14 @@ import torch.nn.functional as F
 
 from models import WeightedLayerFusion
 
+import math
+
 # Per-feature dimensionality of the Phase A music-theory ground truth.
 FEATURE_DIMS = {
     "chroma":             12,
     "spectral_contrast":  7,
     "mode":               1,
-    "key":                1,
+    "key":                1,   # raw integer 0-11 (see cyclic_key below for the corrected form)
     "tempo":              1,
     "rhythmic_stability": 1,
     "spectral_centroid":  1,
@@ -37,9 +39,45 @@ FEATURE_DIMS = {
 }
 
 
-def gap_dim_of(gap_features) -> int:
-    """Total concatenated dimensionality of a gap-feature list."""
-    return int(sum(FEATURE_DIMS[f] for f in gap_features))
+def gap_dim_of(gap_features, cyclic_key: bool = False) -> int:
+    """Total concatenated dimensionality of a gap-feature list.
+
+    With cyclic_key=True the `key` feature occupies 2 dims (sin, cos) instead
+    of 1, because a circular variable (C=0 … B=11, wrapping) must not be fed as
+    a raw linear integer — that destroys the wrap-around geometry. See
+    `encode_gap_value`.
+    """
+    extra = 1 if (cyclic_key and "key" in gap_features) else 0
+    return int(sum(FEATURE_DIMS[f] for f in gap_features)) + extra
+
+
+def encode_gap_value(name: str, value, cyclic_key: bool = False):
+    """Encode a single Phase-A gap feature into its model-input vector.
+
+    Cyclic key encoding (cyclic_key=True, name == 'key'):
+        x_sin = sin(2π · key / 12)
+        x_cos = cos(2π · key / 12)
+    so that adjacent keys (incl. the C↔B wrap) are adjacent in feature space.
+    Every other feature passes through as its raw (already-normalised) value.
+
+    Args:
+        name       : feature name (e.g. 'tempo', 'key').
+        value      : torch scalar/vector tensor from pmemo_music_theory.pt.
+        cyclic_key : apply the sin/cos transform to 'key'.
+    Returns:
+        1-D float tensor.
+    """
+    v = value.reshape(-1).float()
+    if cyclic_key and name == "key":
+        k = float(v[0])                       # raw 0..11 key index
+        ang = 2.0 * math.pi * (k / 12.0)
+        return torch.tensor([math.sin(ang), math.cos(ang)], dtype=torch.float32)
+    return v
+
+
+def build_gap_vector(theory_dict: dict, gap_features, cyclic_key: bool = False):
+    """Assemble the full music-theory gap vector in gap_features order."""
+    return torch.cat([encode_gap_value(f, theory_dict[f], cyclic_key) for f in gap_features])
 
 
 # =============================================================================

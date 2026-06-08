@@ -200,6 +200,60 @@ def main():
             for i in check(f"CE λ={lam}", vals, claimed.get(lam, {})):
                 print(i); all_issues.append(i)
 
+    # Silhouette 2×2 audit (per-fold euclidean/cosine for each model)
+    log = LOGS / "eval_silhouette_audit.log"
+    if log.exists():
+        print(f"\n[SILHOUETTE 2×2 AUDIT]  log={log.name}")
+        text = log.read_text()
+        # split into the two model sections
+        for model, claimed in [("single-MERT", dict(eu=0.1934, co=0.2691)),
+                               ("Enhanced",    dict(eu=0.1815, co=0.2595))]:
+            seg = text.split(f"[{model}]")[1].split("[")[0] if f"[{model}]" in text else ""
+            eus = [float(x) for x in re.findall(r"euclidean=([+\-]?\d+\.\d+)", seg)]
+            cos = [float(x) for x in re.findall(r"cosine=([+\-]?\d+\.\d+)", seg)]
+            got = dict(eu=(sum(eus)/len(eus) if eus else None),
+                       co=(sum(cos)/len(cos) if cos else None))
+            for i in check(f"Silhouette {model}", got, claimed):
+                print(i); all_issues.append(i)
+
+    # Key-encoding A/B (raw vs cyclic) — parse each section's "-> R² A m±s | V m±s"
+    log = LOGS / "eval_key_encoding.log"
+    if log.exists():
+        print(f"\n[KEY-ENCODING A/B]  log={log.name}")
+        text = log.read_text()
+        for label, claimed in [("RAW key", dict(r2_a=0.7049, r2_v=0.5777)),
+                               ("CYCLIC key", dict(r2_a=0.7016, r2_v=0.5697))]:
+            seg = text.split(label)[1] if label in text else ""
+            m = re.search(r"->\s*R\S*\s*A\s*([\d.]+).*?V\s*([\d.]+)", seg)
+            got = dict(r2_a=float(m.group(1)) if m else None,
+                       r2_v=float(m.group(2)) if m else None)
+            for i in check(f"KeyEnc {label}", got, claimed):
+                print(i); all_issues.append(i)
+
+    # Audio ProtoPNet (raw + balanced accuracy)
+    log = LOGS / "train_protopnet.log"
+    if log.exists():
+        print(f"\n[AUDIO PROTOPNET]  log={log.name}")
+        text = log.read_text()
+        ra = re.search(r"Raw accuracy\s*:\s*([\d.]+)", text)
+        ba = re.search(r"Balanced accuracy\s*:\s*([\d.]+)", text)
+        got = dict(raw_acc=float(ra.group(1)) if ra else None,
+                   bal_acc=float(ba.group(1)) if ba else None)
+        for i in check("ProtoPNet", got, dict(raw_acc=0.7275, bal_acc=0.5447)):
+            print(i); all_issues.append(i)
+
+    # ProtoPNet latent Silhouette (objective-vs-topology)
+    log = LOGS / "eval_protopnet_silhouette.log"
+    if log.exists():
+        print(f"\n[PROTOPNET SILHOUETTE]  log={log.name}")
+        text = log.read_text()
+        eu = re.search(r"Silhouette Euclidean\s*:\s*([\d.]+)", text)
+        co = re.search(r"Silhouette cosine\s*:\s*([\d.]+)", text)
+        got = dict(eu=float(eu.group(1)) if eu else None,
+                   co=float(co.group(1)) if co else None)
+        for i in check("ProtoPNet-Sil", got, dict(eu=0.1181, co=0.1778)):
+            print(i); all_issues.append(i)
+
     # Imbalance ablation
     log = LOGS / "eval_imbalance_ablation.log"
     if log.exists():

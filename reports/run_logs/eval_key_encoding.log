@@ -1,0 +1,31 @@
+Device: cuda | Key-encoding A/B (raw integer vs cyclic sin/cos)
+  gap_features = ['tempo', 'key']
+  ✅ Enhanced matched 767 songs | gap_vec dim=2 (['tempo', 'key'])
+  ✅ Enhanced matched 767 songs | gap_vec dim=3 (['tempo', 'key'])
+
+=== RAW key (integer 0-11) | gap_vec dim=2 ===
+  fold 1: R² A=0.6856 V=0.5117 | CCC A=0.8069 V=0.6987
+  fold 2: R² A=0.7147 V=0.6185 | CCC A=0.8438 V=0.7517
+  fold 3: R² A=0.6984 V=0.5560 | CCC A=0.8153 V=0.7020
+  fold 4: R² A=0.7371 V=0.6050 | CCC A=0.8451 V=0.7590
+  fold 5: R² A=0.6886 V=0.5974 | CCC A=0.8139 V=0.7529
+  -> R² A 0.7049±0.019 | V 0.5777±0.039 | CCC A 0.825 V 0.733
+
+=== CYCLIC key (sin/cos) | gap_vec dim=3 ===
+  fold 1: R² A=0.7058 V=0.4957 | CCC A=0.8315 V=0.6988
+  fold 2: R² A=0.6819 V=0.5946 | CCC A=0.8250 V=0.7300
+  fold 3: R² A=0.7098 V=0.5614 | CCC A=0.8300 V=0.7187
+  fold 4: R² A=0.7093 V=0.5906 | CCC A=0.8163 V=0.7533
+  fold 5: R² A=0.7012 V=0.6062 | CCC A=0.8252 V=0.7572
+  -> R² A 0.7016±0.010 | V 0.5697±0.040 | CCC A 0.826 V 0.732
+
+======================================================================
+  KEY-ENCODING A/B — Enhanced model, 5-fold (same splits)
+======================================================================
+Encoding                          R² A            R² V   CCC A   CCC V
+RAW integer 0-11      0.7049±0.019   0.5777±0.039   0.825  0.733
+CYCLIC sin/cos        0.7016±0.010   0.5697±0.040   0.826  0.732
+
+  Δ (cyclic − raw):  R² A -0.0033   R² V -0.0080
+  valence fold-std (raw 0.039, cyclic 0.040); |ΔV| ≤ fold-std → INSIDE noise
+  reference historic raw-key Enhanced: A 0.7182 / V 0.5686

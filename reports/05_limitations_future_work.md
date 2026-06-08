@@ -15,15 +15,19 @@ emotion** — under that framing the negatives below are the contribution. Prese
 as "a SOTA explainable emotion-clustered retrieval system," the results do not
 fully support the claim.
 
-1. **The latent space is not emotionally clustered (core Phase C premise only
-   weakly holds) — and the loss ablation proves SupCR is not the cause of any
-   clustering.** Silhouette ≈ 0 for the trained space and *lower* than raw untrained
-   MERT (0.10 → ≈0); the t-SNE (`artifacts/tsne_baseline_vs_finetuned.png`) shows
-   clusters that mix all four emotions, dominated by HVHA. **The loss ablation is
-   decisive: removing SupCR *raised* Silhouette (−0.031 → +0.021)** — i.e. SupCR
-   actively lowers the quadrant-cluster score. SupCR produces *local* coherence
-   (Precision@5 +0.034, CCC Arousal +0.035) but it pulls songs together by
-   continuous V-A proximity, not into discrete clusters. The original "SupCR
+1. **The latent space is not *cleanly* emotionally clustered (core Phase C premise
+   holds only weakly) — and the loss ablation proves SupCR is not the source of any
+   clustering.** The canonical held-out Silhouette is **≈ 0.19 Euclidean / ≈ 0.26
+   cosine** (single-MERT ≈ Enhanced; `04_results_and_sota.md` §2a-sexies) —
+   *weak-to-moderate*, well below the ≳0.5 that cleanly separable clusters would give.
+   (Earlier "≈ 0" figures were in-sample index measurements and are superseded; see the
+   §2a-sexies audit.) The t-SNE (`artifacts/tsne_baseline_vs_finetuned.png`) shows an
+   organized but continuous manifold that mixes all four emotions, dominated by HVHA —
+   a structured continuum, not four separable blobs. **The loss ablation remains
+   decisive on the *relative* point: removing SupCR *raised* the (in-sample) Silhouette
+   (−0.031 → +0.021)** — i.e. SupCR does not build discrete clusters. SupCR produces
+   *local* coherence (Precision@5 +0.034, CCC Arousal +0.035) by pulling songs together
+   along continuous V-A proximity, not into discrete clusters. The original "SupCR
    organizes the space into emotionally coherent clusters" hypothesis is therefore
    **refuted by our own ablation** — SupCR earns its place via retrieval quality, not
    clustering. This is the most important honest correction to the original claim.
@@ -46,18 +50,20 @@ fully support the claim.
    motivation, which depends on the minority emotions. The balanced sampler is a
    partial mitigation, not a fix.
 
-5. **The explainability is largely descriptive, not model-faithful.** librosa
+5. **The explainability is largely descriptive, not model-faithful** (librosa
    music-theory annotations describe the *song*, not the model's computation; the
-   LLM layer is presentation; the 4 prototype centroids are computed from data, not
-   learned parameters. The ante-hoc core (k-NN + centroids) rests on a latent space
-   that is only weakly organized (point 1), so the XAI is weaker than
-   "ante-hoc explainable MER" implies.
-
-   **Quantified:** the 4-centroid prototype-activation accuracy is **0.506 (dual) /
-   0.462 (MERT)** — *below* the trivial majority-class baseline of **0.611**. So the
-   ante-hoc classifier the supervisor requested exists in *form* (per-prototype
-   activation + argmax) but underperforms "always guess Happy"; Sad recall is only
-   0.17. It is honestly an interpretability readout, not an accurate classifier.
+   LLM layer is presentation) — **but the prototype classifier is now learnable and
+   accurate.** The original 4-centroid readout used *fixed* centroids computed after
+   training and underperformed: accuracy **0.506 (dual) / 0.462 (MERT)**, *below* the
+   majority baseline **0.611**, Sad recall only 0.17. **This has been addressed:** an
+   Audio ProtoPNet (learnable prototypes optimised during gradient descent, L2-distance
+   classification, cluster+separation losses) reaches **0.728 raw / 0.545 balanced
+   accuracy** held-out — **beating both the post-hoc centroid (+0.22) and the majority
+   baseline (+0.12)** — with Sad recall up to **0.69** (`04 §3`,
+   `phaseB/train_protopnet.py`). The ante-hoc prototype explanation the supervisor asked
+   for now exists in *form and substance*. (The k-NN retrieval core still rests on a
+   weakly-organized latent space — point 1 — so this strengthens the prototype branch,
+   not the retrieval branch.)
 
 6. **EDA fusion was marginal** (+0.02 arousal R²) — reported earlier with more
    weight than the effect size justifies.
@@ -92,16 +98,31 @@ what multi-encoder layer attribution can claim.
 Spec-only (MERT + mel-CNN) ties Triple; dual ties single-MERT on Phase C metrics.
 Speech-pretrained features carry no music-relevant complementary structure here.
 
-### 1.5 Silhouette ≈ 0 (continuous emotion)
-Quadrant Silhouette is ≈ 0 for both encoders. This reflects that affect is a
-continuous V-A gradient, not 4 separable clusters — Silhouette-by-quadrant is a weak
-lens. Precision@k is the valid evidence of latent organization. Do **not** report the
-dual's +0.0026 as meaningful separation.
+### 1.5 Silhouette is weak-to-moderate — and *intrinsic*, not an architectural limit
+The canonical held-out quadrant Silhouette is **≈ 0.19 Euclidean / ≈ 0.26 cosine**
+for both encoders (single-MERT ≈ Enhanced; §2a-sexies of `04_results_and_sota.md`) —
+*weak-to-moderate* structure, far below the ≳0.5 of cleanly separable clusters but
+clearly non-zero. **This is a property of the affective geometry, not a model defect:**
+training the same encoder to *classify* quadrants (Audio ProtoPNet, classification +
+separation losses) reaches 74% accuracy yet yields Silhouette 0.18 — no higher than the
+regression model — and explicitly forcing compactness (the CE-head sweep) lifts it only
+to 0.29 at a cost to regression accuracy. Across regression, auxiliary-CE, and full
+classification objectives, Silhouette stays in 0.18–0.29. Affect is a **continuous,
+organized** V-A gradient (Russell's circumplex); the four quadrants are analytical bins,
+not natural clusters. Silhouette-by-quadrant is therefore a secondary lens; Precision@k
+(≈0.58) is the protocol-robust evidence of latent organization. The older in-sample index
+figures (≈0, dual +0.0026) are **superseded** by the matched held-out audit.
 
-### 1.6 Key encoding is naive
-The Enhanced model fed key as a raw integer 0–11, which discards the circular
-relationship between keys. This is the likely reason key did not help valence. A
-one-hot or sin/cos circular encoding is the honest fix to retest.
+### 1.6 Key encoding was naive — now fixed and **tested** (encoding was not the bottleneck)
+The Enhanced model originally fed key as a raw integer 0–11, discarding the circular
+relationship between keys. We long assumed this was *why* key did not help valence.
+**We implemented the proper cyclic encoding** (`[sin(2πk/12), cos(2πk/12)]`,
+`models_enhanced.build_gap_vector(cyclic_key=True)`) and ran a pre-registered A/B
+(`04 §2a-septies`): cyclic vs raw made **no difference** to valence (ΔV = −0.008,
+inside fold-std). **This falsifies the encoding hypothesis** — the geometry fix was
+necessary for correctness but was never the limiting factor. The real limit is the
+weak key→valence relationship at this data scale (and MERT+mel already covering the
+harmonic information). Honest, retested, closed.
 
 ### 1.7 Explanation faithfulness is mixed
 The retrieval/centroid core is ante-hoc, but the librosa music-theory annotation and
@@ -128,11 +149,17 @@ not perceptual ground truth. Whether explanations satisfy real listeners is unva
 
 ## 2. Future Work
 
-| Direction | Why | Effort |
+**Completed since the first draft of this section:**
+- ✅ **Learned prototype vectors (Audio ProtoPNet)** — done. Beats the post-hoc
+  centroid and the majority baseline (0.728 raw / 0.545 balanced; `04 §3`). The
+  XAI gap the supervisor named is closed.
+- ✅ **Circular key encoding (sin/cos)** — done and tested; null effect (`04 §2a-septies`).
+  Encoding was not the valence bottleneck.
+- ✅ **Quadrant-weighted / focal loss** — tested in the imbalance ablation (`04 §2a-ter`);
+  did not beat the WeightedRandomSampler.
+
+| Direction (still open) | Why | Effort |
 | :-- | :-- | :-- |
-| **Quadrant-weighted / focal loss** | Directly target the class-imbalance ceiling (the real bottleneck) | Medium |
-| **Learned prototype vectors (ProtoPNet-style)** | Make the 4 prototypes trained parameters → fully ante-hoc classification, closing the XAI gap the supervisor named | Medium |
-| **Circular key encoding (sin/cos)** | Re-test whether key can help valence once encoded sensibly | Low |
 | **Pretrained music CNN (MusiCNN / PANNs)** | Replace the from-scratch mel-CNN; tests whether music-domain pretraining beats training on ~600 songs | Medium |
 | **Lyrics / multimodal text** | The principled path past the valence ceiling | High |
 | **Metadata enrichment (MusicBrainz/Spotify)** | PMEmo has no artist/title/genre → enables artist-specific recommendations | Medium |

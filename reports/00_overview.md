@@ -44,7 +44,7 @@ itself.
 
 | Phase | Question | Outcome |
 | :-- | :-- | :-- |
-| **A — Probing** | Does MERT encode musically meaningful structure before any fine-tuning? | Yes for harmony (mode 100%); weak for tempo (R²≈0.12); full per-layer probing identifies {tempo, key} as gaps. |
+| **A — Probing** | Does MERT encode musically meaningful structure before any fine-tuning? | Strong for short-time spectral/chroma features (R² 0.68–0.96); mode marginal (0.673, Krumhansl–Schmuckler); full per-layer probing identifies {tempo, key} as gaps. |
 | **B — Prediction** | Can we map SSL embeddings to the V-A circumplex accurately? | Arousal R² up to **0.72**, Valence R² up to **0.58** (at the audio-only ceiling). Several rigorous negative/nuanced findings. |
 | **C — Explanation** | Can the emotion-aware latent space support self-explaining retrieval? | Prototype-based, ante-hoc retrieval + multi-channel explanation; Precision@5 ≈ 0.58 validates it. |
 
@@ -75,15 +75,15 @@ itself.
 - **Best Valence:** Triple (0.5758). **Best Arousal:** Enhanced (0.7182). **Best CCC Arousal:** MERT+EDA (0.8543).
 - R² explained plainly: an Arousal R² of 0.72 means the model accounts for ~72% of the variation in how energetic listeners rated songs.
 - ⚠️ **Caveat on every row:** the global R² is inflated by the majority HVHA (Happy) quadrant (61% of data); minority quadrants have negative R² across *all* configurations. This is a PMEmo class-imbalance ceiling, not a model defect. See `05_limitations_future_work.md`.
-- ⚠️ **Read the honest self-critique first** (`05_limitations_future_work.md`, §0): the latent space is *not* cleanly emotion-clustered (Silhouette ≈ 0, lower than raw MERT), the multi-encoder program was mostly null/negative, and the layer-fusion "interpretability" is near-uniform. The defensible framing of this thesis is **a rigorous audit of SSL-for-affect**, where these negatives are the contribution — not a SOTA emotion-clustered system.
+- ⚠️ **Read the honest self-critique first** (`05_limitations_future_work.md`, §0): the latent space is *not* cleanly emotion-clustered (canonical Silhouette ≈ 0.26 cosine / ≈ 0.19 Euclidean held-out — weak-to-moderate, well below the ≳0.5 of clean clusters; see `04_results_and_sota.md` §2a-sexies), the multi-encoder program was mostly null/negative, and the layer-fusion "interpretability" is near-uniform. The defensible framing of this thesis is **a rigorous audit of SSL-for-affect**, where these negatives are the contribution — not a SOTA emotion-clustered system.
 
-**Phase C evaluation (test-fold, out-of-sample):** Precision@5 ≈ **0.58** (retrieval returns emotionally similar songs); Silhouette ≈ **0** (emotion is a continuous gradient, not 4 separable clusters — reported transparently, not as failure).
+**Phase C evaluation (test-fold, out-of-sample):** Precision@5 ≈ **0.58** (retrieval returns emotionally similar songs); Silhouette ≈ **0.26 cosine** held-out (§2a-sexies; single-MERT ≈ Enhanced) — *weak-to-moderate* structure, i.e. a continuous organized gradient, not 4 separable clusters and not a featureless blob. Reported transparently. (Earlier "≈0" figures were in-sample index measurements, now superseded.)
 
 ## 6. Key Contributions
 
 1. **Empirical probing** of musical information across all 25 MERT layers; identifies which musical attributes the representation does and does not linearly expose.
 2. **Hybrid affective model** combining Weighted Layer Fusion + a four-term loss (MSE + CCC + Rank + SupCR), with a differential optimizer and balanced sampler that fix two concrete training failures.
-3. **Rigorous negative/nuanced findings** that strengthen the scientific story: *fusion collapse* in multi-encoder SSL, *wav2vec2 redundancy*, *negative IADS-E cross-domain transfer*, and the *continuous-emotion* interpretation of a near-zero Silhouette.
+3. **Rigorous negative/nuanced findings** that strengthen the scientific story: *fusion collapse* in multi-encoder SSL, *wav2vec2 redundancy*, *negative IADS-E cross-domain transfer*, and the *continuous-emotion* interpretation of a weak-to-moderate Silhouette (≈0.26, organized continuum rather than discrete clusters).
 4. **Probing-driven feature augmentation** (Phase A→B closure): re-injecting the diagnosed gap features (tempo, key) improves arousal specifically.
 5. **Prototype-based, ante-hoc explainable retrieval** (Phase C): k-NN over an SupCR-organized latent space, a 4-centroid prototype activation profile, contrastive foils, physiological (EDA) grounding, MERT layer attribution, and librosa music-theory annotation — with an explicit, honest ante-hoc vs post-hoc accounting.
 

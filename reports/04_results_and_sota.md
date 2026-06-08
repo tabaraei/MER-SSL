@@ -13,10 +13,13 @@ All Phase B numbers are 5-fold cross-validation on PMEmo (767 matched songs).
 
 | Probe | Target | Metric | Result |
 | :-- | :-- | :-- | :-: |
-| Harmonic mode | Major / Minor | accuracy | ~1.00 |
+| Harmonic mode | Major / Minor | accuracy | 0.673 |
 | Tempo | BPM | R² | 0.12 |
 | Full per-layer sweep | 8 music-theory features × 25 layers | R²/acc | gaps = **{tempo, key}** |
 
+Mode = **0.673** (Krumhansl–Schmuckler, best layer 11). The earlier "~100%" figure was a
+**discarded labelling artifact** (degenerate mean-chroma threshold, `probe_key.py:40`) and
+must not be cited as a result — see `01_phaseA_probing.md` §2.
 Gap criterion: best-layer R² < 0.40 (regression) or accuracy < 0.65 (classification).
 Key/mode via Krumhansl–Schmuckler. Details: `01_phaseA_probing.md`.
 
@@ -36,6 +39,7 @@ Key/mode via Krumhansl–Schmuckler. Details: `01_phaseA_probing.md`.
 | **Enhanced (MERT + wav2vec2 + tempo/key)** | **0.7182** | 0.5686 | 0.8345 | 0.7259 |
 
 - **Best Valence:** Triple (0.5758) · **Best Arousal:** Enhanced (0.7182) · **Best CCC Arousal:** MERT+EDA (0.8543).
+- **Honesty note on the valence lead:** Triple (0.5758), Spec-only (0.5709) and Triple-bio (0.5706) differ by **< 0.005**, which is *inside* the per-fold std (~0.04–0.05). Triple's "best valence" is therefore a **nominal lead within noise**, not a statistically separable win — the honest claim is "the MERT + mel-CNN family tops out at V R² ≈ 0.57, and Triple is the nominal best." Enhanced's arousal lead (0.7182 vs next-best 0.7077) is likewise small but consistent across folds.
 - Enhanced ≈ Triple-bio ≈ Spec-only ≈ Triple on arousal (0.7023–0.7182) → second-branch identity barely matters once a trainable spectral branch is present; wav2vec2, EDA and music-theory features are all roughly interchangeable as the second/third branch beside MERT+Mel.
 - **Single-encoder comparisons (three baselines):**
   - **MERT (music SSL):** 0.6518 / 0.5055 — best valence among single encoders, justifying the MERT backbone.
@@ -92,7 +96,7 @@ proves the gain is not free. Scripts: `phaseB/eval_last_layer_only.py`,
 
 - CCC+Rank vs MSE: **+0.095 CCC A, +0.116 CCC V** → the dominant contribution; justifies the non-MSE terms decisively.
 - SupCR vs no-SupCR: +0.034 P@5, +0.035 CCC A (helps retrieval) but Silhouette **drops** (+0.021 → −0.031) → SupCR improves local retrieval, **not** clustering; it refutes the "SupCR creates emotional clusters" claim.
-- Full vs MSE: +0.13 CCC A, +0.12 CCC V, +0.047 P@5 → the hybrid loss is justified overall. No config clusters (all Silhouettes ≈ 0).
+- Full vs MSE: +0.13 CCC A, +0.12 CCC V, +0.047 P@5 → the hybrid loss is justified overall. No config clusters (all Silhouettes ≈ 0) *(in-sample loss-ablation values; canonical held-out Silhouette is ≈0.19 Euclidean / ≈0.26 cosine, §2a-sexies)*.
 
 ### 2a-ter. Imbalance-handling ablation (MERT-only, 25-layer fusion, 5-fold)
 
@@ -159,13 +163,14 @@ minority per-quadrant R² ≈ unchanged (data-floor invariant).
 | 0.5  | 0.6966 ± 0.016  | 0.5624 ± 0.053  | 0.827 | 0.730 |   0.265 ± 0.064   |
 | 1.0  | 0.6638 ± 0.020  | 0.5601 ± 0.037  | 0.810 | 0.734 |   0.286 ± 0.060   |
 
-- **Side-finding (rewrites the framing of §3 SC0):** the Enhanced model's
-  latent space **already has moderate quadrant structure** —
-  Silhouette = 0.255 (cosine, 5-fold test). The earlier "Silhouette ≈ 0"
-  claim was from the single-MERT loss ablation (§2a-bis) over a different
-  latent space; it does **not** generalise to the multi-encoder Enhanced
-  setup. Multi-encoder fusion produces inherently more cluster-structured
-  latents than single-encoder MERT.
+- **Side-finding (corrected — see §2a-sexies for the canonical measurement):**
+  the Enhanced model's latent space has **weak-to-moderate** quadrant structure —
+  Silhouette = 0.255 (cosine, 5-fold held-out). A dedicated matched audit
+  (§2a-sexies) shows **single-MERT scores the same** (cosine 0.269) — so this
+  structure is **not** specific to the multi-encoder setup, contrary to an earlier
+  draft of this note. The "Silhouette ≈ 0" figures quoted elsewhere came from
+  *in-sample* measurements on older saved indices and are superseded by the
+  matched held-out protocol.
 - **Trade-off is real but unfavourable.** Silhouette rises monotonically
   with λ (+0.031 from λ=0 to λ=1.0 — modest), but R² A drops 4.4 pp at
   λ=1.0 (outside fold-std). λ=0.1 is essentially zero-cost on R² and also
@@ -177,6 +182,96 @@ minority per-quadrant R² ≈ unchanged (data-floor invariant).
 - **Conclusion:** continuous representation is the empirically-defended
   design choice. Cluster enforcement is possible but pays for itself
   poorly. Script: `phaseB/eval_enhanced_quadrant_ce.py`.
+
+### 2a-sexies. Silhouette — canonical measurement (resolves the "≈0 vs 0.255" contradiction)
+
+The Silhouette score appeared inconsistently across earlier drafts (≈0 in some
+places, 0.255 in others). A dedicated matched audit settles it: **both** single-MERT
+and the multi-encoder Enhanced model were trained identically (HybridLoss, balanced
+sampler, differential optimizer, 5-fold KFold(42)) and Silhouette was computed on
+the **held-out test-fold latents** under **both** distance metrics:
+
+| Model       | Silhouette (Euclidean) | Silhouette (cosine) |
+| :--         | :-:                    | :-:                 |
+| single-MERT | 0.1934 ± 0.043         | 0.2691 ± 0.064      |
+| Enhanced    | 0.1815 ± 0.035         | 0.2595 ± 0.054      |
+
+**What this resolves:**
+1. **Model effect ≈ 0.** single-MERT and Enhanced are statistically
+   indistinguishable (cosine Δ = −0.010, inside fold-std). Quadrant structure is
+   **not** a multi-encoder property — the earlier "multi-encoder is more clustered"
+   note (§2a-quinquies) is corrected.
+2. **Metric effect ≈ +0.08.** cosine reads ~0.08 higher than Euclidean on the same
+   latents — part of the historic "≈0 vs 0.255" gap was simply *metric choice*.
+3. **Neither model is ≈0.** Under matched held-out evaluation the trained space
+   carries **weak-to-moderate** quadrant structure (~0.19–0.27), confirmed
+   independently by the CE-sweep λ=0 row (Enhanced cosine 0.255 ≈ 0.260 here).
+4. **The historic "≈0" is superseded.** Those figures came from *in-sample*
+   measurements on older saved retrieval indices (`analyze.py`, the Phase C
+   `prototypes_dual.npy` index), not from this matched held-out protocol.
+
+**Is the low Silhouette an *architectural* limit or an *intrinsic* property of emotion?**
+To rule out "the architecture just can't separate quadrants", we trained the **same
+encoder** with an explicit quadrant-**classification + separation** objective (the Audio
+ProtoPNet, §3) and measured Silhouette on held-out latents under the identical protocol:
+
+| Model (objective) | Silhouette (Euclidean) | Silhouette (cosine) |
+| :-- | :-: | :-: |
+| single-MERT (regression, SupCR) | 0.1934 ± 0.043 | 0.2691 ± 0.064 |
+| Enhanced (regression, SupCR) | 0.1815 ± 0.035 | 0.2595 ± 0.054 |
+| ProtoPNet (classification + separation) | 0.1181 ± 0.055 | 0.1778 ± 0.082 |
+| *(ref)* CE-head sweep, λ=1.0 max | — | 0.286 ± 0.060 |
+
+**The result is decisive — and counter-intuitive.** A model trained *explicitly* to
+separate the four quadrants, and which *succeeds* at classification (74% raw / 0.57
+balanced), produces a latent that is **no more quadrant-clustered than the regression
+model — if anything slightly less** (cosine 0.178 vs 0.260). The reason: ProtoPNet uses
+5 prototypes per class, so a quadrant can be recognised across several scattered regions
+— accurate classification never required each quadrant to be one compact blob.
+**Classifiability and cluster-separation are therefore decoupled.** Across *three*
+independent objectives — regression+SupCR (0.26), an auxiliary quadrant-CE head pushed to
+λ=1.0 (0.29 max), and full ProtoPNet classification (0.18) — Silhouette stays in a tight
+**0.18–0.29 band, never approaching the ≳0.5 of clean clusters.**
+
+**Canonical statement for the thesis:** *the trained latent space has weak-to-moderate
+quadrant structure (Silhouette ≈ 0.19 Euclidean / ≈ 0.26 cosine, held-out, single-MERT
+≈ Enhanced) — a structured continuum, not four discrete clusters and not a featureless
+blob. This low-but-non-zero value is **intrinsic to the affective geometry, not an
+architectural limitation**: even a model optimised to classify the quadrants does not
+produce cleanly separated clusters (Silhouette 0.18 at 74% accuracy), and explicitly
+forcing compactness (CE-head) raises Silhouette only marginally (0.26→0.29) at a cost to
+regression accuracy. The four Russell quadrants are analytical bins on a continuous V-A
+gradient, exactly as the circumplex model predicts.* Precision@5 ≈ 0.58 remains the
+primary, protocol-robust evidence of emotional organization. Scripts:
+`phaseB/eval_silhouette_audit.py`, `phaseB/eval_protopnet_silhouette.py`;
+logs in `reports/run_logs/`.
+
+### 2a-septies. Cyclic key encoding A/B (does fixing the geometry rescue valence?)
+
+Phase A flagged `key` as a gap; the Enhanced model re-injected it, but as a raw
+integer 0–11 — which destroys circular geometry (C=0 and B=11 are adjacent keys yet
+numerically maximally distant). We long assumed this encoding was *why* key didn't
+help valence (+0.001). We tested it directly: same Enhanced model, same 5-fold
+splits, only the key encoding differs (raw 1-d vs cyclic `[sin(2πk/12), cos(2πk/12)]`
+2-d).
+
+| Key encoding | R² A | R² V | CCC A | CCC V |
+| :-- | :-: | :-: | :-: | :-: |
+| Raw integer 0–11 | 0.7049 ± 0.019 | 0.5777 ± 0.039 | 0.825 | 0.733 |
+| Cyclic sin/cos | 0.7016 ± 0.010 | 0.5697 ± 0.040 | 0.826 | 0.732 |
+| Δ (cyclic − raw) | −0.003 | **−0.008 (inside fold-std)** | +0.001 | −0.001 |
+
+- **Result: null.** Cyclic encoding does **not** rescue valence — ΔV = −0.008 is inside
+  the per-fold std (~0.04). **This falsifies our earlier hypothesis** that the raw-integer
+  encoding was the bottleneck. The corrected geometry was necessary for correctness but
+  was not the limiting factor.
+- **Sharper, more defensible conclusion:** the key→valence link is itself too weak to
+  exploit at this data scale, and/or MERT + mel-CNN already capture the harmonic
+  information that `key` would supply (consistent with chroma/mode being *non-gaps* in
+  Phase A). The bottleneck is the feature's relationship to valence and the dataset size
+  — not the encoding. The cyclic encoder is retained as the *correct* implementation
+  (`models_enhanced.build_gap_vector(..., cyclic_key=True)`); it simply doesn't move the
+  needle here. Script: `phaseB/eval_key_encoding.py`.
 
 ### 2b. IADS-E joint learning (negative finding, partial k,p sweep)
 
@@ -212,15 +307,49 @@ This pattern holds across all configurations.
 
 Precision@k = mean fraction of top-k neighbors within a 0.20 V-A radius.
 **Random-chance baseline = 0.276**, so Precision@5 ≈ 0.58 is ~2× chance (retrieval
-works). Silhouette ≈ 0 (trained) = continuous emotion, not 4 clusters (not a
-failure). Encoders statistically tied.
+works). Encoders statistically tied on Precision@k.
 
-**Prototype-activation accuracy** (% of songs whose best-match quadrant centroid =
-true quadrant, leave-one-out): **Dual 0.506 · MERT 0.462** — both **below** the
-majority-class baseline **0.611** (always-HVHA). Per-quadrant recall: HVHA 0.63,
-HVLA 0.55, LVHA 0.41, Sad 0.17. The ante-hoc 4-prototype feature is an
-interpretability readout, **not** an accurate classifier (it loses to the trivial
-baseline — class imbalance + continuous emotion). Reported honestly, not as a win.
+> **Silhouette caveat — these are in-sample index values, NOT the canonical number.**
+> The Silhouette column above (untrained 0.100, single −0.029, dual +0.003) is computed
+> on the stored retrieval index (all 767 songs, in-sample, from older saved checkpoints).
+> These read near-zero. The **canonical** Silhouette, measured on held-out test folds with
+> the current training recipe (§2a-sexies), is **≈ 0.19 Euclidean / ≈ 0.26 cosine** — i.e.
+> weak-to-moderate structure, single-MERT ≈ Enhanced. Both are far below the ≳0.5 of clean
+> clusters, so the "continuous emotion, not 4 separable clusters" reading holds either way;
+> but the honest magnitude is ~0.2–0.26, not 0. Precision@5 ≈ 0.58 remains the primary,
+> protocol-robust evidence.
+
+**Prototype-activation accuracy — post-hoc 4-centroid (superseded by ProtoPNet below).**
+(% of songs whose best-match quadrant centroid = true quadrant, leave-one-out):
+**Dual 0.506 · MERT 0.462** — both **below** the majority-class baseline **0.611**
+(always-HVHA). Per-quadrant recall: HVHA 0.63, HVLA 0.55, LVHA 0.41, Sad 0.17. With
+*fixed* centroids computed after training, the ante-hoc readout lost to the trivial
+baseline. This motivated replacing it with a *learnable*-prototype network.
+
+**Audio ProtoPNet — learnable prototypes (replaces the post-hoc centroid).**
+A ProtoPNet (Chen et al. 2019) learns prototype vectors *during* gradient descent and
+classifies by L2 distance to them (5 prototypes/quadrant = 20 total; cluster +
+separation + L1 losses; balanced sampler; MERT backbone; 5-fold held-out). Result:
+
+| Quadrant classifier | Raw acc | Balanced acc | Protocol |
+| :-- | :-: | :-: | :-- |
+| Majority (always-HVHA) | 0.611 | 0.250 | trivial baseline |
+| Post-hoc 4-centroid (MERT) | 0.462 | — | in-sample LOO |
+| Post-hoc 4-centroid (dual) | 0.506 | — | in-sample LOO |
+| **Audio ProtoPNet (MERT)** | **0.728 ± 0.031** | **0.545 ± 0.041** | held-out 5-fold |
+
+- **ProtoPNet beats both baselines** — +0.22 over the post-hoc centroid and **+0.12 over
+  the majority baseline** (raw acc), under the *more rigorous* held-out protocol (vs the
+  centroid's in-sample LOO). Balanced accuracy 0.545 is >2× the majority-balanced 0.250.
+- **Minority quadrants improve dramatically:** Sad recall **0.17 → 0.69**, and Calm/Angry
+  go from a fixed-centroid collapse to 0.36/0.27. Per-quadrant recall: HVHA 0.857,
+  HVLA 0.358, LVHA 0.266, LVLA 0.689.
+- **Why it works:** learning the prototypes jointly with the encoder (rather than freezing
+  K-means-style centroids after training) lets the prototypes sit where the classes are
+  *actually* separable, and the separation loss pushes them apart. It remains **ante-hoc
+  interpretable** — each prototype is, by construction, evidence for one quadrant.
+- Scripts: `phaseB/models_protopnet.py`, `phaseB/train_protopnet.py`. This upgrades the
+  Phase C prototype-explanation component; it does not change the V-A regression numbers.
 
 **Naive-baseline result (validates the training):** SupCR fine-tuning lifts
 Precision@5 from **0.485 → 0.58 (+≈0.10, ~+19% relative)** over raw average-pooled

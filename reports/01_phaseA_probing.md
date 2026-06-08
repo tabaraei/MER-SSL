@@ -22,12 +22,21 @@ Two probe families:
 - **Regression** (continuous targets): `Ridge(alpha=1.0)`, scored by R².
 - **Classification** (mode, key): `LogisticRegression`, scored by accuracy.
 
-## 2. Initial Probes (mode + tempo)
+## 2. Initial Probes (tempo) — and a discarded early mode probe
 
 | Probe | Target | Result | Reading |
 | :-- | :-- | :-: | :-- |
-| Harmonic mode | Major / Minor | **~100% accuracy** | Harmony is strongly, linearly encoded |
 | Tempo | BPM | **R² ≈ 0.12** | Speed is only weakly/coarsely encoded |
+
+> **Discarded early result — do not cite.** An exploratory script (`probe_key.py`)
+> reported "~100% accuracy" for major/minor mode. This number is **not valid** and is
+> excluded from all findings: the probe's ground-truth label was a degenerate proxy —
+> `1 if mean(chroma) > 0.2 else 0` (`probe_key.py:40`) — which thresholds overall chroma
+> *magnitude*, not musical mode. Almost every song falls on one side of 0.2, so the label
+> is near-constant and a trivial majority-class predictor scores ~100%. The honest mode
+> result comes from the proper **Krumhansl–Schmuckler** estimation in §3 below:
+> **0.673 accuracy** (best layer 11). The "~100%" was a labelling artifact, not evidence
+> that MERT linearly exposes mode.
 
 t-SNE of the raw embeddings shows a smooth gradient by *continuous* valence/arousal
 (`mert_tsne_plot.png`, `mert_emotion_clusters.png`), but **not** clean discrete
@@ -84,11 +93,11 @@ Phase B *Enhanced* model re-injects via the music-theory branch.
 - **Captured but only marginally:** mode at 0.67 acc (binary classification, just
   above the 0.65 threshold) — MERT knows *major vs minor* a little better than
   chance, and the best layer for mode is 11 (mid layer), not an early acoustic one.
-  This is consistent with the initial direct mode probe (§2, ~100% accuracy) once
-  you account for the different evaluation setup: the §2 probe used a curated
-  high-confidence subset, the §3 probe used the full Krumhansl–Schmuckler
-  labelling on every song including ambiguous ones, so accuracy regresses to the
-  realistic 0.67. The two numbers do not contradict each other.
+  **This 0.673 is the only valid mode number.** It supersedes the discarded "~100%"
+  from the exploratory `probe_key.py` (§2), which used a degenerate proxy label
+  (mean-chroma threshold, not actual mode) and therefore measured majority-class
+  frequency rather than MERT's encoding of harmony. There is no contradiction —
+  the "~100%" was never a real result.
 - **Genuine gaps:** **tempo** (negative R² — strictly worse than predicting the
   mean) and **key** (0.58 acc, below the 12-class threshold of 0.65). These two
   features are *not linearly recoverable* anywhere in MERT's 25 layers, which is

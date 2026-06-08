@@ -30,7 +30,7 @@ from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
 
 from losses import HybridLoss, CCCLoss
 from data_utils import _match_dict_to_csv, get_emotion_quadrant, quadrant_r2_breakdown
-from models_enhanced import EnhancedDualSSLModel, gap_dim_of
+from models_enhanced import EnhancedDualSSLModel, gap_dim_of, build_gap_vector
 
 GAP_JSON = "../phaseA/gap_analysis.json"
 THEORY_PATH = "../phaseA/data/pmemo_music_theory.pt"
@@ -50,9 +50,14 @@ def _match_theory_to_csv(theory, df, id_col):
     return matched
 
 
-def load_enhanced(mert_path, w2v_path, theory_path, csv_path, gap_features):
+def load_enhanced(mert_path, w2v_path, theory_path, csv_path, gap_features,
+                  cyclic_key: bool = False):
     """MERT ∩ wav2vec ∩ music-theory ∩ CSV, with the gap vector assembled
-    in the exact gap_features order."""
+    in the exact gap_features order.
+
+    cyclic_key=True encodes the `key` feature as [sin, cos] (corrected circular
+    geometry); default False preserves the original raw-integer behaviour so
+    that previously-reported runs reproduce exactly."""
     mert = torch.load(mert_path, map_location="cpu", weights_only=False)
     w2v = torch.load(w2v_path, map_location="cpu", weights_only=False)
     theory = torch.load(theory_path, map_location="cpu", weights_only=False)
@@ -79,9 +84,9 @@ def load_enhanced(mert_path, w2v_path, theory_path, csv_path, gap_features):
     X_mert = torch.stack([mert_m[i] for i in common]).float()
     X_w2v = torch.stack([w2v_m[i] for i in common]).float()
 
-    def _gap_vec(d):
-        return torch.cat([d[f].reshape(-1).float() for f in gap_features])
-    X_theory = torch.stack([_gap_vec(theory_m[i]) for i in common]).float()
+    X_theory = torch.stack(
+        [build_gap_vector(theory_m[i], gap_features, cyclic_key) for i in common]
+    ).float()
 
     df_m = df.loc[common]
     Y = torch.tensor(df_m[[ar_col, va_col]].values, dtype=torch.float32)

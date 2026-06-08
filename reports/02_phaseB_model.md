@@ -60,8 +60,14 @@ Holding the architecture constant and varying only the loss:
   discrete quadrant separation. **This directly refutes the original "SupCR organizes
   emotional clusters" hypothesis** while still justifying SupCR for retrieval.
 - **Full hybrid vs MSE:** +0.13 CCC A, +0.12 CCC V, +0.047 P@5 — the complex loss is
-  justified overall (for CCC and retrieval; no config produces real clustering —
-  all Silhouettes ≈ 0).
+  justified overall (for CCC and retrieval). No config produces *clean separable*
+  clusters.
+  > **Note on these Silhouette numbers (+0.012 / +0.021 / −0.031):** they are
+  > *in-sample, Euclidean* values from `analyze.py`. They are useful only for the
+  > *relative* SupCR comparison above (removing SupCR raises Silhouette). They are
+  > **not** the canonical Silhouette: a matched held-out audit gives ≈ 0.19
+  > Euclidean / ≈ 0.26 cosine for the trained space (`04_results_and_sota.md`
+  > §2a-sexies). Either way the structure is weak-to-moderate, not clean clusters.
 
 ## 3. Two Training Fixes
 
@@ -166,10 +172,15 @@ features did — a legitimate, publishable negative result.
 
 **Probing-driven augmentation — arousal-only gain.** Re-injecting [tempo, key]
 raised Arousal R² (+0.037) but not Valence (+0.001). **Tempo is the active
-ingredient** — the canonical arousal correlate. **Key was inert**, because it was
-fed as a raw integer 0–11 (keys are circular; this discards that) and `mode` was
-not in the gap set. Honest lesson: supplying a diagnosed gap helps *only* when the
-feature has a real link to the target *and* is encoded sensibly.
+ingredient** — the canonical arousal correlate. **Key was inert.** We first
+suspected the raw-integer 0–11 encoding (keys are circular; a linear integer
+discards that). **Tested directly** (`04 §2a-septies`): switching to the correct
+cyclic `[sin, cos]` encoding changed valence by −0.008 (inside fold-std) — i.e.
+**the encoding was *not* the cause.** The honest lesson is stronger than first
+written: a diagnosed gap helps only when the feature has a real link to the target;
+key's link to valence is too weak to exploit here (and chroma/mode, the harmonic
+cues that *do* relate to valence, were already non-gaps that MERT captures). Encoding
+correctness was necessary but not sufficient.
 
 **Class-imbalance ceiling.** Across *all* configs, per-quadrant R² is negative for
 the three minority quadrants (Calm/Angry/Sad); the high global R² is HVHA-driven.
@@ -182,7 +193,26 @@ field-wide ceiling (valence depends on lyrics/culture absent from audio).
 
 Phase A diagnosed *what MERT cannot linearly expose* (tempo, key). Phase B fed
 exactly those back (Enhanced model). The improvement landed precisely where theory
-predicts (arousal, via tempo) and was honestly null where the encoding was poor
-(valence, via raw key). The same diagnosed gaps also drive the Phase C
-music-theory explanation — one coherent thread from probing → prediction →
-explanation.
+predicts (arousal, via tempo) and was honestly null for valence (via key). The same
+diagnosed gaps also drive the Phase C music-theory explanation — one coherent thread
+from probing → prediction → explanation.
+
+**Viva-defensible reading of the asymmetry (revised after testing — important).**
+The two gap features behaved differently, and we *tested* the explanation rather than
+asserting it.
+- **Tempo helped (arousal +0.037)** because tempo has a *monotonic* relationship with
+  arousal (faster ≈ more energetic) — a real, exploitable link.
+- **Key did not help valence (+0.001).** Our first hypothesis was an encoding fault:
+  key is a *circular* variable (C=0 and B=11 are adjacent) that was fed as a raw linear
+  integer 0–11, which destroys the wrap-around geometry. **We implemented the correct
+  cyclic `[sin, cos]` encoding and ran a pre-registered A/B** (`04 §2a-septies`,
+  `models_enhanced.build_gap_vector(cyclic_key=True)`): valence moved by −0.008, *inside*
+  fold-std. **So the encoding was not the cause** — that hypothesis is falsified. The
+  honest, tested reading: key's *relationship to valence* is too weak to exploit at this
+  data scale, and the harmonic cues that genuinely relate to valence (chroma, mode) are
+  *non-gaps* MERT already captures — so there is little for a `key` branch to add.
+- **The closure story still holds, now more rigorously:** *diagnose the gap, re-inject it,
+  gain appears where the feature truly relates to the target* — tempo→arousal works; key
+  →valence does not, and we confirmed (not just assumed) that the limit is the feature's
+  weak link to valence, not its encoding. Correct encoding was necessary for a clean test
+  but was not sufficient to create signal that isn't there.

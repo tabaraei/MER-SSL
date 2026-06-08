@@ -478,8 +478,8 @@ def figure4():
 
     axL.text(0.5, -0.08,
             "Hypothesised Discrete Clustering\n"
-            "(disproven for single-MERT: Silhouette ≈ 0;\n"
-            "see §3.5 — multi-encoder achieves Silhouette 0.26)",
+            "(not observed: clean separable clusters would give Silhouette ≳ 0.5;\n"
+            "canonical held-out value is ≈0.26 cosine — weak-to-moderate)",
             ha="center", fontsize=8.5, color=SLATE, style="italic",
             transform=axL.transAxes, va="top",
             bbox=dict(facecolor=LCREAM, edgecolor=SLATE,

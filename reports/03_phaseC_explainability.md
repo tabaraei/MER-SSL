@@ -57,15 +57,30 @@ true quadrant (leave-one-out centroids):
 | Dual-SSL | 0.506 | **0.611** |
 | MERT | 0.462 | 0.611 |
 
-**The accuracy (50.6%) is *below* the trivial majority-class baseline (61.1%)** — a
-classifier that always guesses "Happy" beats prototype-matching. Per-quadrant
-recall: HVHA 0.63, HVLA 0.55, LVHA 0.41, **Sad 0.17**. **Honest conclusion:** the
-4-centroid profile satisfies the supervisor's *form* (a per-prototype activation +
-argmax, ante-hoc by construction) and is a useful **interpretability readout**, but
-it is **not a competitive classifier** — it underperforms the majority baseline,
-driven by the same class-imbalance and continuous-emotion limitations (near-zero
-Silhouette, §5). It must be presented as an interpretability device, not an
-accurate quadrant classifier.
+The *post-hoc* 4-centroid accuracy (50.6%) is **below** the majority baseline (61.1%) —
+fixed centroids computed after training underperform "always guess Happy". This
+motivated a learnable-prototype upgrade.
+
+**Upgrade — Audio ProtoPNet (learnable prototypes, ante-hoc by design).** Following
+ProtoPNet (Chen et al. 2019), we learn the prototype vectors *during* gradient descent
+(5/quadrant = 20 total) and classify by L2 distance, with cluster + separation losses
+and a balanced sampler (`phaseB/models_protopnet.py`, `train_protopnet.py`):
+
+| Quadrant classifier | Raw acc | Balanced acc | Sad recall |
+| :-- | :-: | :-: | :-: |
+| Majority (always-HVHA) | 0.611 | 0.250 | 0.00 |
+| Post-hoc 4-centroid (MERT) | 0.462 | — | 0.17 |
+| **Audio ProtoPNet (MERT, held-out)** | **0.728 ± 0.031** | **0.545 ± 0.041** | **0.69** |
+
+**ProtoPNet beats both the post-hoc centroid (+0.22) and the majority baseline (+0.12)**,
+on the more rigorous held-out protocol, and lifts Sad recall from 0.17 → 0.69. Learning
+the prototypes jointly with the encoder (rather than freezing centroids after training)
+places them where the quadrants are actually separable. **It stays ante-hoc and
+interpretable** — each prototype is, by construction, evidence for one quadrant (identity
+prior on the classification head). **Conclusion:** the ante-hoc prototype classifier the
+supervisor requested now exists in *form and substance* — it is a genuine, accurate,
+self-explaining classifier, not merely a readout. (The k-NN retrieval branch is separate
+and still rests on the weakly-organized latent space, §5.)
 
 ### 3b. Two-Layer Explanation
 - **Layer 1 — deterministic template:** V-A coordinates, similarities, per-neighbor
@@ -125,14 +140,18 @@ so Precision@5 ≈ 0.58 is roughly **2× chance** — retrieval genuinely return
 emotionally similar songs. This is the load-bearing evidence and the foundation of
 the example-based explanation.
 
-**Silhouette ≈ 0 — reported honestly.** Both ≈ 0 (dual's +0.0026 is *not*
-meaningful separation). Emotion is a **continuous** V-A gradient, not four discrete
-clusters; Silhouette-by-quadrant imposes hard 0.5 cutoffs on a smooth manifold, so
-boundary songs are legitimately close to the adjacent quadrant → near-zero even
-when local structure is good (as Precision@k shows). Class imbalance compounds it.
-**Lead with Precision@k; present Silhouette with this continuous-manifold caveat.**
-The two encoders are statistically tied — consistent with the Phase B finding that
-the second encoder adds little to latent *organization*.
+**Silhouette — corrected magnitude.** The index Silhouettes above (untrained 0.100,
+single −0.029, dual +0.003) are *in-sample* values from the stored retrieval index
+(older checkpoints, all 767 songs). They are **not** the canonical number: a matched
+held-out audit gives Silhouette **≈ 0.19 Euclidean / ≈ 0.26 cosine** for the trained
+space, with single-MERT ≈ Enhanced (`04_results_and_sota.md` §2a-sexies). Either way
+the score is *weak-to-moderate* and far below the ≳0.5 of clean separable clusters:
+emotion is a **continuous, organized** V-A gradient, not four discrete clusters.
+Silhouette-by-quadrant imposes hard 0.5 cutoffs on a smooth manifold, so boundary
+songs are legitimately close to the adjacent quadrant. **Lead with Precision@k**
+(the protocol-robust metric); present Silhouette with this caveat. The two encoders
+are statistically tied — consistent with the Phase B finding that the second encoder
+adds little to latent *organization*.
 
 **Definitions.** Precision@k = mean fraction of top-k neighbors within a 0.20 V-A
 Euclidean radius (label consistency, not perceptual ground truth). Silhouette =
@@ -153,12 +172,16 @@ fine-tuning, no SupCR (`export_artifacts.py`).
 **SupCR fine-tuning lifts Precision@5 from 0.485 → 0.58 (+≈0.10, ~+19% relative)** —
 clear, measurable evidence that training tightened the emotion-relevant retrieval
 space (the example-based explanation is built on a genuinely better space, not raw
-embeddings). **Honest nuance:** the *untrained* space has the higher Silhouette
-(0.100 vs ≈0). Raw MERT retains coarse quadrant blobbiness (probably
-genre/acoustic structure) but worse fine-grained V-A retrieval; SupCR reorganizes
-around *continuous* V-A proximity, raising Precision@k while flattening the discrete
-clusters. The metric that matters for retrieval (Precision@k) improves; the
-discrete-cluster metric (Silhouette) is the wrong lens, as argued above.
+embeddings). **Honest nuance (with the corrected magnitude):** within this *in-sample
+index* measurement the untrained space scores a higher Silhouette than the trained one
+(0.100 vs ≈0) — raw MERT retains coarse genre/acoustic blobbiness but worse
+fine-grained V-A retrieval, and SupCR reorganizes around *continuous* V-A proximity,
+raising Precision@k while flattening in-sample discrete clusters. Note, however, that
+the *canonical* held-out Silhouette of the trained space is ≈0.26 cosine (§2a-sexies),
+not ≈0 — so "training destroys clusters" overstates it; more precisely, training trades
+a little in-sample quadrant blobbiness for substantially better V-A retrieval. The
+metric that matters for retrieval (Precision@k) improves; the discrete-cluster metric
+(Silhouette) is the secondary lens, as argued above.
 
 ### 5b. Exported thesis artifacts (`phaseC/artifacts/`)
 

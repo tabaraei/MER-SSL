@@ -120,7 +120,12 @@ s.append(Paragraph(
     "Mode (major / minor) is captured marginally (best-layer 11, accuracy 0.67 — just above the binary "
     "threshold). Tempo and key are <b>genuine gaps</b>: not linearly recoverable from any of the 25 "
     "layers. The Phase B <i>Enhanced</i> model re-injects exactly these two features through a small "
-    "hand-crafted music-theory branch — a Phase-A-driven architectural choice, not a guess. "
+    "hand-crafted music-theory branch — a Phase-A-driven architectural choice, not a guess. Re-injecting "
+    "them helped <b>arousal</b> (via tempo, +0.037) but <b>not valence</b> (via key, +0.001). I first "
+    "blamed key's encoding (a raw integer 0–11 destroys its circular geometry), so I implemented the "
+    "correct cyclic sin/cos encoding and ran an A/B — it changed valence by −0.008 (inside noise). So the "
+    "encoding was <i>not</i> the cause; key's link to valence is simply too weak to exploit here. An honest, "
+    "<i>tested</i> conclusion rather than an assumed one. "
     "<b>Honest framing of the t-SNE:</b> the raw MERT latent space is one mixed blob (Fig. 1, left); "
     "emotion is present but continuously distributed, not separated into clusters.", BODY))
 
@@ -271,8 +276,9 @@ s.append(Paragraph(
     "(+0.034 Precision@5) but, surprisingly, removing it <b>raised</b> the clustering score — so SupCR "
     "tightens local neighbourhoods by continuous similarity, it does not build discrete clusters. This "
     "ablation disproves my original 'SupCR creates emotion clusters' claim, and I have corrected it. "
-    "<i>Caveat (see §3.6):</i> these Silhouette numbers are from the single-MERT setup; the multi-encoder "
-    "Enhanced model has substantially better baseline quadrant structure (Silhouette ≈ 0.26).", BODY))
+    "<i>Caveat (see §3.6):</i> these are <i>in-sample</i> Silhouette values; the canonical held-out "
+    "measurement gives ≈0.26 cosine for the trained space (single-MERT ≈ Enhanced) — weak-to-moderate, "
+    "not ≈0.", BODY))
 
 s.append(Paragraph("3.6 Cluster-enforcement trade-off — can we make the t-SNE clusters look discrete?", H2))
 s.append(Paragraph(
@@ -289,11 +295,14 @@ ce = [[hdr("λ"), hdr("R² A"), hdr("R² V"), hdr("CCC A"), hdr("CCC V"), hdr("S
 tc = Table(ce, colWidths=[TW*0.10, TW*0.20, TW*0.20, TW*0.14, TW*0.14, TW*0.22]); tc.setStyle(tstyle()); s.append(tc)
 s.append(Spacer(1, 0.1*cm))
 s.append(Paragraph(
-    "<b>Side-finding (rewrites the t-SNE framing):</b> the Enhanced model's latent space <i>already has "
-    "moderate quadrant structure</i> — Silhouette = 0.255 at λ=0. The historic 'Silhouette ≈ 0' claim was "
-    "from the single-MERT loss ablation (§3.5); it does NOT apply to the multi-encoder Enhanced setup. "
-    "Multi-encoder fusion produces inherently more cluster-structured latents than single-encoder MERT — "
-    "the Fig. 1 'blob' framing slightly under-sells what the Enhanced model does.", BODY))
+    "<b>Side-finding (corrected by a dedicated audit):</b> the trained latent space has <i>weak-to-moderate</i> "
+    "quadrant structure — Silhouette = 0.255 (cosine) at λ=0, not ≈0. A matched 2×2 audit (both models × both "
+    "metrics, held-out folds) shows <b>single-MERT scores the same</b> (cosine 0.269 / Euclidean 0.193) as "
+    "Enhanced (0.260 / 0.182): the structure is <b>not</b> a multi-encoder property (cosine Δ = −0.01), and an "
+    "earlier draft claiming 'multi-encoder is more clustered' was wrong. The historic 'Silhouette ≈ 0' came "
+    "from <i>in-sample</i> measurements on older saved indices; the canonical held-out value is ≈0.19 Euclidean "
+    "/ ≈0.26 cosine. So the Fig. 1 'blob' framing under-sells slightly — it is a structured continuum, not a "
+    "featureless blob — but it is also <i>not</i> four separable clusters (which would need Silhouette ≳ 0.5).", BODY))
 s.append(Paragraph(
     "<b>The trade-off:</b> Silhouette rises monotonically with λ but only modestly (+0.031 from λ=0 to "
     "λ=1.0). R² A drops 4.4 pp at λ=1.0 — outside fold-std. λ=0.1 is essentially zero-cost on R² but "
@@ -304,13 +313,24 @@ s.append(Paragraph(
     "the actual limit. This is the third independent confirmation of the dataset-floor hypothesis after "
     "the imbalance ablation (§3.3) and mixup augmentation (§3.4).", BODY))
 s.append(Paragraph(
-    "<b>Viva-defensible conclusion:</b> the continuous representation is a deliberate, empirically-"
-    "defended design choice, not a representational failure. Russell's circumplex (Russell 1980) defines "
-    "valence and arousal as <i>continuous bipolar dimensions</i> — the four quadrants are analytical "
-    "bins for per-quadrant reporting, not categorical psychological constructs (Eerola &amp; Vuoskoski "
-    "2011). The observed manifold reflects both the construct and the PMEmo label distribution (61% HVHA). "
-    "Cluster enforcement is achievable (λ=1.0 lifts Silhouette to 0.29) but pays for itself poorly. "
-    "We keep the continuous representation.", BODY))
+    "<b>Decisive topology test (objective vs structure).</b> Is the low Silhouette an architectural "
+    "limit or intrinsic to emotion? I trained the <i>same encoder</i> with an explicit quadrant-"
+    "classification + separation objective (the Audio ProtoPNet, §4) and measured held-out Silhouette "
+    "under the same protocol. Result: it classifies quadrants at 74% yet its latent Silhouette is "
+    "<b>0.18 cosine — no higher than the regression model (0.26), if anything lower.</b> A model trained "
+    "to separate the quadrants does not produce separated quadrant clusters: classifiability and "
+    "cluster-compactness are <i>decoupled</i> (ProtoPNet recognises a quadrant across several scattered "
+    "prototypes). Across three objectives — regression+SupCR (0.26), CE-head at λ=1.0 (0.29 max), and "
+    "ProtoPNet classification (0.18) — Silhouette stays in a tight 0.18–0.29 band, never near the ≳0.5 "
+    "of clean clusters.", BODY))
+s.append(Paragraph(
+    "<b>Viva-defensible conclusion:</b> the continuous representation is not a limitation but the correct "
+    "geometry. Russell's circumplex (Russell 1980) defines valence and arousal as <i>continuous bipolar "
+    "dimensions</i>; the four quadrants are analytical bins, not categorical constructs (Eerola &amp; "
+    "Vuoskoski 2011). The weak-to-moderate Silhouette (≈0.19 Euclidean / ≈0.26 cosine, held-out) is "
+    "<b>intrinsic to the affective geometry</b> — it cannot be raised meaningfully even by a model "
+    "optimised to classify the quadrants, and forcing it costs regression accuracy. The architecture "
+    "successfully maps a continuous emotional gradient rather than imposing artificial clusters.", BODY))
 
 # ── Figures ──
 s.append(Spacer(1, 0.1*cm))
@@ -329,28 +349,47 @@ s.append(Paragraph("4. Phase C — Explainability &amp; Ante-Hoc Prototypes", H1
 s.append(Paragraph(
     "<b>Retrieval works.</b> The system finds emotionally similar songs at about <b>twice the rate of "
     "random chance</b> (Precision@5 ≈ 0.58 vs a random baseline of 0.276), and clearly better than the "
-    "raw untrained model (0.485). <b>Ante-hoc prototypes:</b> I added the 4-centroid profile we "
-    "discussed — for any song it reports its similarity to the Happy/Calm/Angry/Sad centroids and names "
-    "the closest one. It is a nice interpretability tool. <b>But</b> its raw accuracy (50.6%) actually "
-    "<b>loses</b> to a 'always guess Happy' baseline (61.1%), because the dataset is 61% Happy. So it is "
-    "a good explanation device, not a strong stand-alone classifier — and I report it that way.", BODY))
-pc = [[hdr("Latent space"), hdr("Precision@5"), hdr("Silhouette"), hdr("Prototype accuracy")],
+    "raw untrained model (0.485).", BODY))
+pc = [[hdr("Latent space"), hdr("Precision@5"), hdr("Silhouette"), hdr("Post-hoc centroid acc")],
       [cell("Naive raw MERT (untrained)"), cell("0.485", center=True), cell("+0.100", center=True), cell("—", center=True)],
       [cell("MERT (SupCR-trained)"), cell("0.576", center=True), cell("-0.029", center=True), cell("0.462", center=True)],
       [cell("Dual MERT+wav2vec2 (SupCR)", bold=True), rc("0.585"), cell("+0.003", center=True), cell("0.506", center=True)]]
 tp = Table(pc, colWidths=[TW*0.37, TW*0.20, TW*0.20, TW*0.23]); tp.setStyle(tstyle()); s.append(tp)
 s.append(Spacer(1, 0.08*cm))
-s.append(Paragraph("Reference points: random-chance Precision@5 = 0.276; majority-class ('always Happy') "
-                   "baseline for prototype accuracy = 0.611. Silhouette ≈ 0 everywhere → emotion is a "
-                   "continuous gradient, not four separable clusters (this is a finding, not a bug).", CAPTION))
+s.append(Paragraph("Reference points: random-chance Precision@5 = 0.276. The Silhouette column is "
+                   "<i>in-sample</i> (older index); the canonical held-out value is ≈0.26 cosine (§3.6).", CAPTION))
+s.append(Spacer(1, 0.1*cm))
+s.append(Paragraph(
+    "<b>Ante-hoc prototypes — upgraded from fixed centroids to a learnable Audio ProtoPNet.</b> The "
+    "original 4-centroid profile (fixed K-means-style centroids computed <i>after</i> training) was a nice "
+    "interpretability readout but a weak classifier: raw accuracy 0.462–0.506, <i>below</i> the "
+    "'always-Happy' baseline (0.611). I replaced it with an <b>Audio ProtoPNet</b> (Chen et al. 2019) that "
+    "learns prototype vectors <i>during</i> gradient descent (5/quadrant) and classifies by L2 distance, "
+    "with cluster + separation losses and a balanced sampler.", BODY))
+pp = [[hdr("Quadrant classifier"), hdr("Raw acc"), hdr("Balanced acc"), hdr("Sad recall")],
+      [cell("Majority (always-Happy)"), cell("0.611", center=True), cell("0.250", center=True), cell("0.00", center=True)],
+      [cell("Post-hoc 4-centroid (MERT)"), cell("0.462", center=True), cell("—", center=True), cell("0.17", center=True)],
+      [cell("Audio ProtoPNet (learnable)", bold=True), rc("0.728"), rc("0.545"), rc("0.69")]]
+tpp = Table(pp, colWidths=[TW*0.40, TW*0.20, TW*0.20, TW*0.20]); tpp.setStyle(tstyle()); s.append(tpp)
+s.append(Spacer(1, 0.08*cm))
+s.append(Paragraph(
+    "<b>ProtoPNet beats both baselines</b> — +0.22 over the post-hoc centroid and <b>+0.12 over the "
+    "majority baseline</b> (raw accuracy, held-out 5-fold — a stricter protocol than the centroid's "
+    "in-sample test), and lifts Sad recall from 0.17 to 0.69. Learning the prototypes jointly with the "
+    "encoder places them where the quadrants are actually separable. It stays ante-hoc interpretable (each "
+    "prototype is, by construction, evidence for one quadrant). This turns the weakest part of Phase C into "
+    "a genuine, accurate, self-explaining classifier — the ante-hoc prototype model my supervisor asked for, "
+    "now in substance, not just form.", BODY))
 
 # ── 5. Honest limitations ──
 s.append(Paragraph("5. Honest Limitations (what did not work)", H1))
 for b in [
     "<b>Class imbalance is the real ceiling:</b> 61% of songs are Happy; the model effectively only "
     "works well there (negative R² on Sad/Calm/Angry). This weakens the therapy/clinical motivation.",
-    "<b>The latent space does not cluster by emotion:</b> Silhouette ≈ 0, and the prototype classifier "
-    "loses to the trivial baseline. Retrieval still works locally (Precision@5 ≈ 2× chance).",
+    "<b>The latent space does not cleanly cluster by emotion:</b> canonical held-out Silhouette ≈ 0.26 "
+    "cosine (weak-to-moderate, not the ≳0.5 of clean clusters). Retrieval still works locally "
+    "(Precision@5 ≈ 2× chance), and the prototype <i>classifier</i> — once upgraded to a learnable Audio "
+    "ProtoPNet — now beats the majority baseline (0.728 vs 0.611, §4).",
     "<b>Multi-encoder stacking mostly failed:</b> wav2vec2 is redundant, IADS-E transfer is negative, "
     "and the layer-fusion 'interpretability' is near-uniform. Real gains came from the mel-CNN and tempo.",
     "<b>Valence:</b> our single-dataset audio-only valence (R² 0.576) is competitive — above prior "

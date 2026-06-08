@@ -1,0 +1,32 @@
+Device: cuda | Silhouette audit — model × metric (2×2)
+  Loading embeddings from: pmemo_mert_all_layers.pt
+  Loading labels from: /datasets/emotions/PMEmo2019/annotations/static_annotations.csv
+  Detected 'Dictionary-of-Tensors' format. Matching IDs...
+  ✅ Successfully matched 767 samples.
+
+[single-MERT] training 5 folds …
+  fold 1: euclidean=+0.1353  cosine=+0.1843
+  fold 2: euclidean=+0.2540  cosine=+0.3593
+  fold 3: euclidean=+0.1628  cosine=+0.2190
+  fold 4: euclidean=+0.1843  cosine=+0.2635
+  fold 5: euclidean=+0.2305  cosine=+0.3192
+  ✅ Enhanced matched 767 songs | gap_vec dim=2 (['tempo', 'key'])
+
+[Enhanced] training 5 folds …
+  fold 1: euclidean=+0.1335  cosine=+0.1902
+  fold 2: euclidean=+0.2375  cosine=+0.3498
+  fold 3: euclidean=+0.1623  cosine=+0.2235
+  fold 4: euclidean=+0.1768  cosine=+0.2576
+  fold 5: euclidean=+0.1973  cosine=+0.2765
+
+================================================================
+  SILHOUETTE 2×2 — model × metric (5-fold test-latent mean ± std)
+================================================================
+Model                      Euclidean              Cosine
+single-MERT         0.1934 ± 0.0430.0    0.2691 ± 0.064
+Enhanced            0.1815 ± 0.035    0.2595 ± 0.054
+
+  Interpretation keys:
+   • model effect (cosine):  Enhanced 0.260 − single-MERT 0.269 = -0.010
+   • metric effect (Enhanced): cosine 0.260 − euclidean 0.181 = +0.078
+   • historic loss-ablation single-MERT euclidean ≈ 0 (analyze.py) — cross-check above
