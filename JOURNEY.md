@@ -24,6 +24,77 @@ The results were telling. For major versus minor, the probe hit 100% accuracy �
 
 ## Building the emotion prediction model (Phase B)
 
+
+### Model Architecture Explanations
+### Model Architecture Pipeline and Tensor Flow
+
+Here is exactly how our pipeline works, step-by-step, from the raw audio to the final 128-D vector:
+
+---
+
+#### Step 1: The MERT Feature Extraction
+We start by feeding the raw $24\text{ kHz}$ audio waveform into the frozen MERT model. Inside MERT, the audio first passes through a CNN feature extractor, and then through a stack of transformer layers. In total, MERT outputs 25 distinct layers of representations for the song. Each of these 25 layers contains a sequence of 1024-dimensional vectors capturing different levels of musical semantics.
+
+---
+
+#### Step 2: The "Weighted Layer Fusion" (The Mixer)
+Instead of just throwing away the first 24 layers and only using the last one, we use a module called `WeightedLayerFusion`.
+
+* **How it works:** The model assigns a learnable parameter (a weight) to each of the 25 layers. We pass these 25 weights through a mathematical function called a softmax, which forces all the weights to sum up to exactly $1.0$ (or $100\%$).
+* **The calculation:** The model multiplies Layer 1 by Weight 1, Layer 2 by Weight 2, all the way to Layer 25, and then adds them all together into a single, fused 1024-D vector.
+* **Our Scientific Finding:** Ideally, we wanted the model to strongly prefer specific layers (e.g., giving $80\%$ weight to layer 15). However, our empirical audit showed a "fusion collapse": because our PMEmo dataset is so small ($\sim 600$ training songs), the network lacked the gradient pressure to learn specialized weights. As a result, the weights stayed nearly uniform (an entropy of $3.218$ out of a maximum $3.219$), meaning the model essentially just calculated an equal average of all 25 layers.
+
+---
+
+#### Step 3: The Multi-Encoder Assembly (Adding the other features)
+Once we have our fused 1024-D vector from MERT, we bring in the other features. In our "Enhanced" or "Triple" architectures, we extract features from other frozen models separately:
+
+* We get a 768-D vector from the speech-pretrained wav2vec2 model.
+* We use a tiny linear branch to process our extracted music-theory gap features (tempo and cyclic key), producing a 32-D vector.
+
+We then concatenate (glue side-by-side) these vectors together. For example, in the Enhanced Dual-SSL model, fusing MERT (1024) + wav2vec2 (768) + theory (32) creates a massive 1824-D vector.
+
+---
+
+#### Step 4: The Bottleneck and Latent Space
+A 1824-dimensional vector is far too large for a dataset of only $\sim 600$ songs; it would instantly overfit. To solve this, we force this massive vector through a Multi-Layer Perceptron (MLP) "bottleneck".
+
+* The MLP shrinks the data step-by-step through dense layers: $1024 \text{ (or } 1824\text{)} \rightarrow 256 \rightarrow 128$ dimensions.
+* We then apply $L_2$-normalization to this final 128-D vector. Geometrically, this projects every song onto the surface of a 128-dimensional sphere. This specific spherical space is our "contrastive latent space", which is heavily shaped by our SupCR loss to pull emotionally similar songs close together.
+
+---
+
+#### Step 5: The Output
+Finally, a small regression head reads that 128-D coordinate and outputs just two continuous numbers: the exact Arousal and Valence predictions for the song.
+
+> By explaining it this way, you show your examiners exactly how the tensor dimensions flow through the network, while honestly acknowledging that the `WeightedLayerFusion` acts more as a transparent interpretability hook rather than a magical feature selector.
+
+---
+
+#### 1. Why MERT uses a CNN first, then Transformers
+MERT is built on the same architectural foundation as speech models like wav2vec 2.0 and HuBERT. Feeding raw audio waveforms directly into a Transformer is computationally impossible because raw audio contains tens of thousands of samples per second (e.g., $24,000\text{ Hz}$), and Transformers scale quadratically with sequence length. 
+
+To solve this, the audio first goes through a multi-layer 1-Dimensional Convolutional Neural Network (1D-CNN) which acts as an acoustic feature extractor. The CNN downsamples the raw, high-resolution audio waveform into a much lower framerate (e.g., 50 or 75 frames per second) by extracting local, short-range acoustic textures like edges of notes or drum hits. Once the audio is "tokenized" into this manageable sequence of vectors, the 12-layer Transformer block takes over to model the long-range temporal dependencies and global musical semantics across the whole song.
+
+---
+
+#### 2. Is concatenating a 1024-D vector with a 32-D theory vector too naive?
+It seems unbalanced at first glance, but from a machine learning perspective, it is a mathematically standard and robust method for multi-modal feature fusion. While the 1024 dimensions from MERT are massive, our Phase A linear probing proved that they are "blind" to absolute tempo and musical key. The tiny 32-D vector (generated from our $\text{Linear}(2, 32)$ layer) injects this explicitly missing structural gap. 
+
+The concatenation itself is just a data-gathering step to create a single 1056-D tensor. The real magic happens immediately after, when this concatenated vector is pushed into the Multi-Layer Perceptron (MLP) bottleneck. The MLP’s dense weight matrices look at all 1056 inputs simultaneously and learn to dynamically scale and mix them. If the 32-D key/tempo features are highly predictive of Arousal (which they are), the network's gradient descent will simply assign larger weights to those 32 connections, completely overcoming the dimensional imbalance.
+
+---
+
+#### 3. What is $L_2$ Normalization and why do we use it?
+$L_2$ normalization is a mathematical operation where you divide a vector by its own magnitude (its length), forcing the vector's length to become exactly $1.0$:
+
+$$\mathbf{\hat{x}} = \frac{\mathbf{x}}{\|\mathbf{x}\|_2}$$
+
+Geometrically, if you $L_2$-normalize all the 128-D vectors coming out of our bottleneck, you project every single song onto the surface of a 128-dimensional hypersphere. This is strictly necessary for our Phase C explainability system for two reasons:
+
+* **Distance calculation:** Our SupCR contrastive loss and our $k$-NN retrieval system rely on finding the nearest neighbors using cosine similarity or Euclidean distance. By forcing all vectors to have a radius of $1.0$, we eliminate magnitude as a variable. This means two songs will be considered similar only if they point in the exact same semantic direction in the latent space, ignoring irrelevant scaling factors.
+* **Stability:** In deep metric learning, unbounded vectors can cause the network's loss to explode or collapse. Normalizing the embeddings stabilizes the gradients during training and creates a well-behaved continuous gradient of emotions across the latent space.
+
 With a trustworthy foundation, I built the part that actually predicts emotion. My first instinct was simple regression — just fit a line from MERT's numbers to the arousal and valence scores. But that wasn't enough, because emotion prediction has several different ways of being "wrong," and a single basic error measure can't catch them all.
 
 So I used a four-part loss. A loss is just the score the model tries to make as small as possible during training; combining four of them means the model has to satisfy four different definitions of "good" at once. The first part simply checks how far off the predicted numbers are. The second part checks that the predictions rise and fall in step with the real emotions without sitting at a constant offset (this one, called CCC, is the strict standard in emotion research). The third part makes sure songs end up in the right *order* from low to high energy, even if the exact numbers are a little off. And the fourth part — the most important for later — pulls songs that feel similar close together inside the model's internal map, so emotionally similar songs end up as neighbours. That last one quietly set up the explanation system I'd build in Phase C.
@@ -249,3 +320,6 @@ The prototype rebuild was a genuine win. The new learnable ProtoPNet scored abou
 **What happened — and I'll be honest that my prediction was wrong.** I expected the classification-trained model to show a *higher* clustering score (tighter clusters). It came out *lower* (0.18 vs 0.26) — even though it classified the four emotions correctly 74% of the time. At first this seemed backwards, but it's actually the strongest possible result for my argument. The model recognises each emotion using several scattered "prototype" points, so it can classify a sad song accurately without all sad songs sitting together in one tight clump. In plain terms: **being able to tell emotions apart and having them form neat separate clusters are two different things** — you can do the first without the second. So now I have three different training setups (my main predictor, a cluster-forcing version, and this classifier) and *all three* land in the same narrow low range (0.18–0.29), nowhere near what real separated clusters would score. 
 
 **What I learned.** The continuous-gradient story isn't a limitation of my model — it's a property of emotion itself, and now I can prove it three independent ways instead of asserting it once. This is (I notice) the third time in this project that running the experiment overturned what I assumed and left me with a *better* story than the one I'd have written from intuition — first the clustering claim, then the musical-key fix, now this. I'm increasingly convinced the most valuable habit I've built is refusing to write "X because Y" until I've actually measured Y. (One small honesty note: the script I wrote even printed a conclusion line assuming the result would go the other way — I left the real numbers as the record and corrected the interpretation, rather than quietly rewriting history.)
+
+
+
