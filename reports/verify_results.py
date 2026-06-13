@@ -254,6 +254,35 @@ def main():
         for i in check("ProtoPNet-Sil", got, dict(eu=0.1181, co=0.1778)):
             print(i); all_issues.append(i)
 
+    # Unified Phase C — index/query symmetry proof
+    log = LOGS / "unified_phaseC.log"
+    if log.exists():
+        print(f"\n[UNIFIED PHASE C — SYMMETRY]  log={log.name}")
+        text = log.read_text()
+        cm = re.search(r"cosine\(query, stored\):\s*min\s*([\d.]+)", text)
+        dim = re.search(r"latent dim\s*=\s*(\d+)", text)
+        got = dict(symmetry_cosine_min=float(cm.group(1)) if cm else None,
+                   latent_dim=float(dim.group(1)) if dim else None)
+        for i in check("UnifiedPhaseC", got, dict(symmetry_cosine_min=1.0, latent_dim=128.0)):
+            print(i); all_issues.append(i)
+        if "✅ SYMMETRIC" in text:
+            print("   ✓   [UnifiedPhaseC] build==query encoder: SYMMETRIC marker present")
+        else:
+            print("   ❌  [UnifiedPhaseC] SYMMETRIC marker missing"); all_issues.append("bad")
+
+    # Enhanced held-out retrieval Precision@k
+    log = LOGS / "eval_enhanced_retrieval.log"
+    if log.exists():
+        print(f"\n[ENHANCED RETRIEVAL]  log={log.name}")
+        text = log.read_text()
+        got = {}
+        for k in (5, 10, 20):
+            m = re.search(rf"Precision@{k}\s*:\s*([\d.]+)", text)
+            got[f"p@{k}"] = float(m.group(1)) if m else None
+        for i in check("EnhancedRetrieval", got,
+                       dict(**{"p@5": 0.5943, "p@10": 0.5761, "p@20": 0.5477})):
+            print(i); all_issues.append(i)
+
     # Imbalance ablation
     log = LOGS / "eval_imbalance_ablation.log"
     if log.exists():

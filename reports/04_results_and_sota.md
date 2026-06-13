@@ -299,24 +299,33 @@ This pattern holds across all configurations.
 
 ## 3. Phase C — Retrieval Evaluation (test-fold, out-of-sample)
 
-| Space | Precision@5 | Precision@10 | Precision@20 | Silhouette |
+| Space | Precision@5 | Precision@10 | Precision@20 | Silhouette (pooled) |
 | :-- | :-: | :-: | :-: | :-: |
 | **Naive raw last-layer MERT** (untrained baseline) | 0.4847 | 0.4614 | 0.4553 | **0.1001** |
 | MERT (single, SupCR) | 0.5760 | 0.5687 | 0.5469 | −0.0293 |
 | Dual-SSL (MERT + wav2vec2, SupCR) | 0.5849 | 0.5613 | 0.5382 | +0.0026 |
+| **Enhanced (MERT + w2v2 + cyclic key)** — *benchmark / deployed* | **0.5943** | **0.5761** | **0.5477** | 0.0039 |
 
 Precision@k = mean fraction of top-k neighbors within a 0.20 V-A radius.
-**Random-chance baseline = 0.276**, so Precision@5 ≈ 0.58 is ~2× chance (retrieval
-works). Encoders statistically tied on Precision@k.
+**Random-chance baseline = 0.276.** The **Enhanced** model — the architecture actually
+deployed in Phase C (§3 of `03_phaseC_explainability.md`) — is the **best retriever**
+(Precision@5 = 0.594, +0.009 over Dual, ~2.15× chance), so the benchmark model is best at
+*both* regression (arousal R² 0.7182) and retrieval. All rows use the identical 5-fold
+out-of-sample protocol.
 
-> **Silhouette caveat — these are in-sample index values, NOT the canonical number.**
-> The Silhouette column above (untrained 0.100, single −0.029, dual +0.003) is computed
-> on the stored retrieval index (all 767 songs, in-sample, from older saved checkpoints).
-> These read near-zero. The **canonical** Silhouette, measured on held-out test folds with
-> the current training recipe (§2a-sexies), is **≈ 0.19 Euclidean / ≈ 0.26 cosine** — i.e.
-> weak-to-moderate structure, single-MERT ≈ Enhanced. Both are far below the ≳0.5 of clean
-> clusters, so the "continuous emotion, not 4 separable clusters" reading holds either way;
-> but the honest magnitude is ~0.2–0.26, not 0. Precision@5 ≈ 0.58 remains the primary,
+> **Silhouette caveat — this column is the POOLED-models artifact, NOT the canonical number.**
+> The Silhouette here (untrained 0.100, MERT −0.029, Dual +0.003, Enhanced +0.004) is
+> computed on the retrieval index, which **pools test-fold latents from all 5 separately-
+> trained fold models** into one array. Those 5 models' latent spaces are independently
+> rotated, so a *global* Silhouette over the pool collapses to ≈0 — a measurement artifact
+> of pooling, not a property of any model. Precision@k is robust to this (it is a *local*
+> V-A-neighbourhood metric) and stays ~0.58–0.59; Silhouette (a *global* cohesion/separation
+> ratio) is not. The **canonical** Silhouette, computed **per-fold within a single model**
+> (§2a-sexies), is **≈ 0.19 Euclidean / ≈ 0.26 cosine** (single-MERT ≈ Enhanced). This
+> reconciles the long-standing "≈0 vs 0.26" tension: ≈0 = pooled-5-models retrieval index;
+> 0.26 = per-model held-out. Either way it is far below the ≳0.5 of clean clusters, so the
+> "continuous emotion, not 4 separable clusters" reading holds. Precision@5 ≈ 0.58–0.59
+> remains the primary,
 > protocol-robust evidence.
 
 **Prototype-activation accuracy — post-hoc 4-centroid (superseded by ProtoPNet below).**

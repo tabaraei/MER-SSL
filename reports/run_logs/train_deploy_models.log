@@ -1,0 +1,11 @@
+Device: cuda | training DEPLOYMENT checkpoints (all-data, no held-out)
+  ✅ Enhanced matched 767 songs | gap_vec dim=3 (['tempo', 'key'])
+
+[1/2] Final Enhanced (cyclic key) on ALL data …
+  ✅ saved best_model_enhanced_final.pt | gap_dim = 3 (cyclic key)
+
+[2/2] Final Audio ProtoPNet on ALL data …
+  ✅ saved protopnet_final.pt | prototypes = 20
+
+Done. Deployment checkpoints ready for phaseC/build_index_unified.py.
+NOTE: all-data checkpoints — do NOT report their in-sample accuracy; canonical metrics remain the 5-fold held-out values.

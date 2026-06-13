@@ -1,0 +1,24 @@
+Device: cuda | Enhanced held-out retrieval (out-of-sample test-fold latents)
+  ✅ Enhanced matched 767 songs | gap_vec dim=3 (['tempo', 'key'])
+  -- fold 1/5 -- train 613 encode-test 154
+  -- fold 2/5 -- train 613 encode-test 154
+  -- fold 3/5 -- train 614 encode-test 153
+  -- fold 4/5 -- train 614 encode-test 153
+  -- fold 5/5 -- train 614 encode-test 153
+
+============================================================
+  ENHANCED — HELD-OUT RETRIEVAL (out-of-sample)
+============================================================
+  Precision@5  : 0.5943
+  Precision@10 : 0.5761
+  Precision@20 : 0.5477
+  Silhouette (cosine, consistency check) : 0.0039
+
+  Comparison @ Precision@5 (same out-of-sample protocol):
+    Naive raw MERT (untrained)   0.485
+    MERT (SupCR)                 0.576
+    Dual-SSL (SupCR)             0.585
+    random chance                0.276
+    Enhanced (this run)          0.594
+
+  Δ Enhanced − Dual = +0.0093  |  Δ Enhanced − random = +0.3183

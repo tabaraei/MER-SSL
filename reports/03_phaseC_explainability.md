@@ -26,6 +26,28 @@ Aamodt & Plaza, 1994). It does not produce a black-box label and then rationaliz
 it; the decision is similarity to known examples. Backend: cosine k-NN
 (`IndexFlatIP` / sklearn fallback) over L2-normalized latents.
 
+### 2a. Unified encoder — index/query model symmetry (corrected pipeline)
+
+A model-symmetry audit found that the original retrieval stack (`mainC.py`,
+`retrieval.py`) instantiated only the single-encoder `MERModel` and that *query*
+mode never re-encoded the query — it looked up a pre-stored latent by ID. The best
+Phase B model (Enhanced) and the Audio ProtoPNet were not wired into retrieval at all.
+This was corrected: a single `UnifiedEnhancedEncoder` (`phaseC/encoder_unified.py`)
+now encodes **both** the database and the runtime query through one `encode()` call —
+the **Enhanced** architecture (MERT + wav2vec2 + cyclic-key theory branch) → MLP
+bottleneck → 128-D latent → L2-norm. Because build and query share one code path,
+symmetry is guaranteed by construction.
+
+**Symmetry proof** (`phaseC/build_index_unified.py --mode verify`): re-encoding every
+corpus song via the query path reproduces the stored index vector to floating-point
+precision — **cosine(query, stored) min = 1.000000, max ‖Δ‖ = 1.06×10⁻⁶**, all index
+L2-norms = 1.0000, latent dim = 128. A new (unseen) query is now genuinely encodable,
+not only an in-corpus lookup. The deployment checkpoint (`best_model_enhanced_final.pt`)
+is trained on all 767 songs; its in-sample accuracy is **not** reported — canonical
+metrics remain the 5-fold held-out values. The ProtoPNet ante-hoc profile
+(`phaseC/protopnet_readout.py`, §3a) replaces the post-hoc 4-centroid readout.
+Log: `reports/run_logs/unified_phaseC.log`.
+
 ## 3. The Explanation Channels
 
 | Channel | What it adds | Grounding |
@@ -128,24 +150,31 @@ a real bug: `best_model.pt` is now DualSSL and will not load into `mainC`'s
 single-encoder `MERModel`; and it fixed the EDA lookup, which failed because IDs
 arrived float-formatted as `'1.0'` → `1.0_EDA.csv` missing.)
 
-| Encoder | Precision@5 | Precision@10 | Precision@20 | Silhouette |
+| Encoder | Precision@5 | Precision@10 | Precision@20 | Silhouette (pooled) |
 | :-- | :-: | :-: | :-: | :-: |
 | MERT (single) | 0.5760 | 0.5687 | 0.5469 | −0.0293 |
-| **Dual-SSL (MERT + wav2vec2)** | **0.5849** | 0.5613 | 0.5382 | **+0.0026** |
+| Dual-SSL (MERT + wav2vec2) | 0.5849 | 0.5613 | 0.5382 | +0.0026 |
+| **Enhanced (MERT + w2v2 + cyclic key)** — *deployed* | **0.5943** | **0.5761** | **0.5477** | 0.0039 |
 
-**Precision@k validates retrieval.** ~54–58% of each song's nearest latent
-neighbors fall within a 0.20 V-A radius. The **random-chance baseline is 0.276**
-(expected fraction of a random neighbour within that radius, `extra_metrics.py`),
-so Precision@5 ≈ 0.58 is roughly **2× chance** — retrieval genuinely returns
-emotionally similar songs. This is the load-bearing evidence and the foundation of
-the example-based explanation.
+**Precision@k validates retrieval — and the deployed Enhanced model is the best
+retriever.** ~55–59% of each song's nearest latent neighbours fall within a 0.20 V-A
+radius. The **random-chance baseline is 0.276**, so the **Enhanced** model's
+Precision@5 = **0.594** is ~**2.15× chance** and the highest of all configurations
+(+0.009 over Dual). This matters because Enhanced is the architecture the unified Phase C
+pipeline actually deploys (§2a), so the reported retrieval number now matches the
+deployed model. This is the load-bearing evidence and the foundation of the
+example-based explanation. (`phaseB/eval_enhanced_retrieval.py`, same out-of-sample
+protocol as the rows above.)
 
-**Silhouette — corrected magnitude.** The index Silhouettes above (untrained 0.100,
-single −0.029, dual +0.003) are *in-sample* values from the stored retrieval index
-(older checkpoints, all 767 songs). They are **not** the canonical number: a matched
-held-out audit gives Silhouette **≈ 0.19 Euclidean / ≈ 0.26 cosine** for the trained
-space, with single-MERT ≈ Enhanced (`04_results_and_sota.md` §2a-sexies). Either way
-the score is *weak-to-moderate* and far below the ≳0.5 of clean separable clusters:
+**Silhouette — pooled-models artifact, not the canonical magnitude.** The Silhouettes in
+this table (untrained 0.100, MERT −0.029, Dual +0.003, Enhanced +0.004) are computed on the
+retrieval index, which **pools test-fold latents from all 5 separately-trained fold models**;
+those spaces are independently rotated, so a *global* Silhouette over the pool collapses to
+≈0 — a pooling artifact, not a property of any model (Precision@k, a *local* metric, is
+unaffected and stays ~0.58–0.59). The **canonical** Silhouette, computed **per-fold within a
+single model**, is **≈ 0.19 Euclidean / ≈ 0.26 cosine** (single-MERT ≈ Enhanced,
+`04_results_and_sota.md` §2a-sexies). Either way the score is *weak-to-moderate* and far
+below the ≳0.5 of clean separable clusters:
 emotion is a **continuous, organized** V-A gradient, not four discrete clusters.
 Silhouette-by-quadrant imposes hard 0.5 cutoffs on a smooth manifold, so boundary
 songs are legitimately close to the adjacent quadrant. **Lead with Precision@k**

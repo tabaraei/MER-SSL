@@ -1,0 +1,53 @@
+%% Phase C — Ante-Hoc Explanation (detailed).
+%% Built on the Phase B 128-d L2-normalised latent, reused unchanged. The SAME
+%% encoder embeds both the corpus (index build) and the runtime query, guaranteeing
+%% one consistent geometry (build = query symmetry). Two explanation channels:
+%% case-based k-NN retrieval, and a learnable Audio ProtoPNet.
+flowchart TB
+  classDef data fill:#E8F0FE,stroke:#1B3A6B,color:#1B3A6B,font-weight:bold;
+  classDef frozen fill:#E5E7EB,stroke:#6B7280,color:#374151;
+  classDef trainable fill:#ECFDF5,stroke:#10B981,color:#065F46;
+  classDef latent fill:#FEF3C7,stroke:#B45309,color:#7C2D12,font-weight:bold;
+  classDef out fill:#FDE8E8,stroke:#C0392B,color:#7F1D1D;
+  classDef weak fill:#F3F4F6,stroke:#9CA3AF,color:#6B7280;
+
+  ENC["Phase B encoder, reused unchanged<br/>outputs 128-d L2-normalised latent<br/>(build = query symmetry)"]:::frozen
+
+  subgraph BUILD["Index build (offline)"]
+    direction TB
+    CORP(["767 corpus excerpts"]):::data
+    IDX["Latent index<br/>unit-sphere vectors"]:::latent
+  end
+
+  subgraph QUERY["Query (runtime)"]
+    direction TB
+    Q(["query excerpt"]):::data
+    QZ["query latent z"]:::latent
+  end
+
+  CORP --> ENC --> IDX
+  Q --> ENC
+  ENC --> QZ
+
+  subgraph CH1["Channel 1 - Example-based retrieval (ante-hoc)"]
+    direction TB
+    KNN["Cosine k-NN<br/>inner product on unit sphere"]:::trainable
+    NB["Nearest neighbours<br/>+ contrastive foils"]:::out
+    KNN --> NB
+  end
+
+  subgraph CH2["Channel 2 - Audio ProtoPNet"]
+    direction TB
+    PB["Learnable prototype bank<br/>m per quadrant, 4m total"]:::trainable
+    DIST["Distance to prototypes<br/>d_j = norm(z - p_j) squared"]:::trainable
+    LOG["Identity-prior linear<br/>to quadrant logits"]:::trainable
+    PROF["Per-prototype profile<br/>+ quadrant prediction"]:::out
+    PB --> DIST --> LOG --> PROF
+  end
+
+  IDX --> KNN
+  QZ --> KNN
+  QZ --> DIST
+
+  CENT["Static 4-centroid readout<br/>post-hoc baseline (surpassed)"]:::weak
+  IDX -.->|mean per quadrant| CENT

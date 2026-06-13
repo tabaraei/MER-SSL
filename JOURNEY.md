@@ -109,6 +109,30 @@ I also ran an extra experiment with EDA fusion. EDA, electrodermal activity, is 
 
 ## Making the model explain itself (Phase C)
 
+
+### RAG Knowledge Base and Phase B/C Transition
+
+#### The Knowledge Base for the RAG System
+The **Knowledge Base (or Vector Database)** of your RAG system is not a collection of raw audio files, spectrograms, or text descriptions. It is a collection of **frozen, $L_2$-normalized 128-dimensional continuous vector embeddings** derived from your entire dataset of songs (e.g., the ~600 songs from the PMEmo dataset). 
+
+Every song in your database is represented as a single coordinate point on the surface of a 128-dimensional hypersphere. This geometric space is highly structured because it was optimized using Supervised Contrastive Loss ($\text{SupCR}$) during Phase B. Consequently, songs with identical or highly similar emotional profiles (Valence and Arousal) are clustered tightly together in the same continuous neighborhood.
+
+When a user provides a new query song, the RAG pipeline operates as follows:
+1. **Embedding Generation:** The query song is passed through the frozen Phase B encoder, transforming it into its own 128-D vector coordinate.
+2. **Vector Retrieval:** The system calculates the distance (typically Cosine or Euclidean distance) between the query coordinate and all the stored song coordinates in the knowledge base.
+3. **Context Injection ($k$-NN):** The system extracts the metadata, emotional labels, or proto-features of the $k$-Nearest Neighbors (the closest points on the sphere). This retrieved acoustic context is then fed into your downstream component to generate the final explained output.
+
+#### Latent Space vs. Model Output: The Technical Distinction
+The 128-dimensional latent space is the intermediate output produced by the network's bottleneck, sitting exactly one layer before the final regression head. The absolute final output of the Phase B model *during training* consists of the two continuous numbers representing Valence and Arousal. 
+
+#### Phase Handover and Pipeline Mechanics
+The architectural transition and data flow between the two phases operate as follows:
+
+* **Creation in Phase B:** During Phase B, the audio passes through the `WeightedLayerFusion` and the auxiliary branches, which are concatenated and forced through a Multi-Layer Perceptron (MLP) bottleneck that shrinks the data down to 128 dimensions. This vector is then $L_2$-normalized to project it onto a hypersphere. This specific 128-D spherical representation is the latent space. A final linear regression head then reads this 128-D coordinate to output the final Arousal and Valence numbers.
+* **Transition to Phase C:** Once Phase B finishes training, you essentially "chop off" that final linear regression head and freeze the rest of the weights. The model no longer outputs two numbers; instead, its final output becomes that 128-D latent vector.
+* **Inheritance by Phase C:** Phase C inherits this frozen encoder and its resulting 128-D latent space. Because Phase B was trained with the Hybrid Loss (specifically the SupCR contrastive term), this space is already highly organized so that emotionally similar songs are clustered in the same local continuous neighborhoods. Phase C simply runs its $k$-Nearest Neighbors ($k$-NN) retrieval and Audio ProtoPNet classifications directly inside this structured 128-D output space.
+
+> **Defense Presentation Guide Summary:** "The latent space used for Phase C retrieval is the $L_2$-normalized 128-D bottleneck representation extracted directly from the frozen Phase B encoder."
 Predicting two numbers is useful, but for my thesis it wasn't enough. A number like "valence 0.4" tells a listener nothing they can feel or trust. The heart of my project was explanation, so Phase C turned the predictions into something a person could actually understand.
 
 I used prototype-based retrieval. In plain words: instead of inventing an explanation out of thin air, the system answers a query by finding real example songs from the collection that sit closest to it in the emotion map, and those real examples *are* the explanation. It's reasoning by analogy — "this song belongs here because it's almost identical to these other songs you can listen to." Because Phase B had already pulled similar songs into tight neighbourhoods, this step worked naturally.
@@ -323,3 +347,26 @@ The prototype rebuild was a genuine win. The new learnable ProtoPNet scored abou
 
 
 
+
+### Making sure the retrieval system actually uses my best model — and a symmetry I had to build, not just check
+
+**What I did.** I audited my explanation/retrieval system for a worry that had been nagging me: does it use the *same* best model to encode both the song library and a new query song, or did I accidentally leave a simpler model hardcoded somewhere? I traced every retrieval script line by line.
+
+**Why I did it.** If the database were built with one model and queries encoded with another, every "similar song" result would be comparing apples to oranges — silently wrong, and very hard to spot. For an explainable system, that would undermine everything.
+
+**What happened — the reality was different from what I assumed, in two ways.** First, I had assumed there were two encoders (one for the library, one for queries) that might disagree. There weren't: the query path never actually re-encoded anything — it just looked up a pre-computed vector by song ID. So "symmetry" was technically guaranteed, but only because the system could only ever query songs already in its library; there was no way to encode a genuinely new song at all. Second, and more importantly, the retrieval scripts were hardwired to the *simplest* single-encoder MERT, not my best multi-encoder (Enhanced) model, and my new learnable-prototype classifier (ProtoPNet) wasn't connected to the retrieval system at all. So my best work simply wasn't in the deployed pipeline.
+
+**What I did about it.** Rather than patch the old scripts, I built one shared encoder that both the library-building step and the query step call — the exact same function, so they *cannot* drift apart by design. It uses the full best model (music + speech + the corrected cyclic-key music-theory branch), produces the 128-number fingerprint, and normalises it, identically for every song. Then I proved the symmetry empirically: I re-encoded all 767 library songs through the query path and checked they matched the stored library vectors — they matched to six decimal places (the tiny difference is just floating-point rounding). I also wired in the ProtoPNet so the emotion-prototype explanation now uses the accurate learnable version instead of the old weak averaging method. One honesty caveat I'm careful about: the deployed model is trained on all songs (so the system has a fingerprint for every track), which means I must NOT quote its accuracy as a real score — the honest performance numbers stay the held-out cross-validation ones.
+
+**What I learned.** "Are the two encoders the same?" turned out to be the wrong question — the right one was "is there even a real encoder on the query side, and is it the best model?" The answer was no on both counts, and finding that took tracing the actual code rather than trusting my mental model of it. The fix isn't just *checking* symmetry, it's *enforcing* it structurally — one shared function means there's nothing to keep in sync by hand. That's a more robust kind of correctness than "I verified it once."
+
+### Giving my benchmark model its own retrieval score — and finally explaining the clustering-score mystery
+
+**What I did.** After making the explanation system use my best model (the multi-encoder "Enhanced" one) for both the library and the queries, I realised the retrieval-quality number I'd been reporting (how often the songs it pulls back are genuinely emotionally similar) was measured on an *older, simpler* model. So I measured the best model's retrieval quality properly — the honest way, where every song is scored by a model that never trained on it — using the exact same yardstick as the older numbers so they're directly comparable.
+
+**Why I did it.** If I'm going to call the Enhanced model my benchmark and deploy it, its retrieval score has to be a real, measured number for *that* model, not inherited from a different one. Otherwise the thesis claims one thing and the system does another.
+
+**What happened — good news, and a mystery solved.** Good news first: the best model is also the best retriever. Its Precision@5 came out at 0.594, edging out the next-best model (0.585) and more than double random guessing (0.276). So the model I deploy is best at everything — predicting energy, and finding similar songs. Clean story.
+The mystery: this same run reported the "clustering score" (Silhouette) as basically zero, even though my careful audit had established it as 0.26. For a moment that looked like a contradiction. But I worked out exactly why, and it's instructive: the retrieval index is assembled by pooling song-fingerprints from *five different models* (one per cross-validation fold). Each of those five models lands its fingerprints in a slightly different orientation, so when you pool them and ask "are the four emotion regions tightly separated *across the whole pool*?", the answer collapses to zero — not because any single model is disorganised, but because you've mixed five differently-oriented maps together. The retrieval score survives this mixing (it only cares about *local* neighbours), but the clustering score doesn't (it's a *global* measure). 
+
+**What I learned.** This finally and precisely explains the "is it zero or is it 0.26?" question that has haunted this project: **zero** is what you get when you pool five models' maps for the retrieval index; **0.26** is the honest within-one-model number. They're both correct, for different measurements — and the difference is a property of *pooling*, not of the model. It also re-confirms the methodological line I've held all along: trust Precision@k (robust, local) over Silhouette (fragile, global) for judging whether the space is emotionally organised. Pleasingly, the experiment I ran to give my benchmark model a fair retrieval score also handed me the cleanest possible explanation of a months-old puzzle.

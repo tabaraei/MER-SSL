@@ -1,0 +1,60 @@
+%% Phase B — Multi-Encoder Affective Regressor (detailed).
+%% Grey = frozen self-supervised backbone; green = trainable module;
+%% amber = the shared 128-d latent; purple = training objective. The model
+%% performs continuous V-A regression; the four Russell quadrants are analytical bins.
+flowchart TB
+  classDef data fill:#E8F0FE,stroke:#1B3A6B,color:#1B3A6B,font-weight:bold;
+  classDef frozen fill:#E5E7EB,stroke:#6B7280,color:#374151;
+  classDef trainable fill:#ECFDF5,stroke:#10B981,color:#065F46;
+  classDef latent fill:#FEF3C7,stroke:#B45309,color:#7C2D12,font-weight:bold;
+  classDef out fill:#FDE8E8,stroke:#C0392B,color:#7F1D1D;
+  classDef loss fill:#EDE9FE,stroke:#7C3AED,color:#4C1D95;
+
+  AUD(["PMEmo 2019 excerpt (audio)"]):::data
+
+  subgraph STREAMS["Three complementary feature streams"]
+    direction LR
+    MERT["MERT backbone (frozen)<br/>25 layers x 1024-d"]:::frozen
+    W2V["wav2vec2 backbone (frozen)<br/>13 layers x 768-d"]:::frozen
+    THEO(["Music-theory gap features<br/>tempo + cyclic-key sin/cos"]):::data
+    F1["Weighted Layer Fusion<br/>w = softmax(alpha) over 25 layers<br/>f_mert in 1024-d"]:::trainable
+    F2["Weighted Layer Fusion<br/>w = softmax(alpha) over 13 layers<br/>f_w2v in 768-d"]:::trainable
+    F3["Theory projection<br/>small trainable MLP"]:::trainable
+    MERT --> F1
+    W2V --> F2
+    THEO --> F3
+  end
+
+  CAT["Concatenate<br/>f_mert || f_w2v || f_theory"]:::trainable
+  BN["MLP bottleneck g(.)<br/>compress to 128-d"]:::trainable
+  L2["L2-normalise<br/>project onto unit hypersphere"]:::trainable
+  Z["Shared latent z in 128-d<br/>(reused by Phase C)"]:::latent
+  HEAD["Linear V-A head"]:::trainable
+  VA["Valence + Arousal<br/>continuous coordinates"]:::out
+
+  F1 --> CAT
+  F2 --> CAT
+  F3 --> CAT
+  CAT --> BN --> L2 --> Z --> HEAD --> VA
+
+  subgraph LOSS["Hybrid training objective (weights)"]
+    direction TB
+    LMSE["L_MSE (1.0) - coordinate error"]:::loss
+    LCCC["L_CCC (0.5) - agreement and bias"]:::loss
+    LRANK["L_Rank (0.3) - ordinal structure"]:::loss
+    LSUP["L_SupCR (0.1) - shapes latent geometry"]:::loss
+  end
+
+  subgraph TR["Training interventions"]
+    direction TB
+    DIFF["Differential optimiser<br/>fusion lr 1e-2, head/proj lr 1e-4"]:::trainable
+    BAL["Balanced sampler<br/>inverse quadrant frequency"]:::trainable
+  end
+
+  AUD --> MERT
+  AUD --> W2V
+  AUD --> THEO
+
+  VA -. supervised by .-> LOSS
+  LSUP -. shapes geometry for retrieval .-> Z
+  TR -. applied during training .-> CAT

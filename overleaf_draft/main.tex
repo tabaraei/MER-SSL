@@ -1,0 +1,25 @@
+\documentclass{article}
+
+% --- These are the tools needed for the visualizations ---
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}    % Chapter 4 equations: \text, \lVert, \underbrace
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[edges]{forest}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}       % Chapter 4 architecture diagrams (Phase B / Phase C)
+\usetikzlibrary{positioning,calc,fit,backgrounds,arrows.meta,shadows,decorations.pathreplacing}
+\graphicspath{{diagrams/}{diagrams/tikz/}}  % so \includegraphics finds the diagram files
+
+\title{MIR SSL THESIS}
+\author{Arvin Jafari Moghadam Fard}
+\date{November 2025}
+
+\begin{document}
+\maketitle
+
+\include{tesi} % This line pulls in your SOTA text from the other file
+
+\end{document}

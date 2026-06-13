@@ -1,0 +1,30 @@
+========== BUILD ==========
+  ✅ UnifiedEnhancedEncoder | best_model_enhanced_final.pt | gap_dim=3 (cyclic_key=True) | latent=128-D
+  Aligned 767 songs | MERT (767, 25, 1024) | w2v (767, 13, 768) | theory (767, 3) (cyclic key)
+  ✅ index → prototypes_enhanced.npy | latents (767, 128) | L2 norms ∈ [1.0000, 1.0000] (should be 1.0)
+
+========== VERIFY (symmetry proof) ==========
+  ✅ UnifiedEnhancedEncoder | best_model_enhanced_final.pt | gap_dim=3 (cyclic_key=True) | latent=128-D
+
+  SYMMETRY PROOF — re-encode (query path) vs stored index (build path):
+    cosine(query, stored):  min 1.000000  mean 1.000000
+    ‖query − stored‖:       max 1.06e-06  mean 5.98e-07
+    → ✅ SYMMETRIC: build and query use the identical encoder.
+    index L2 norms ∈ [1.0000, 1.0000] | latent dim = 128
+
+========== QUERY 760 ==========
+  ✅ UnifiedEnhancedEncoder | best_model_enhanced_final.pt | gap_dim=3 (cyclic_key=True) | latent=128-D
+  ✅ ProtoPNetReadout | protopnet_final.pt | 20 prototypes (5/quadrant)
+
+🔍 Query 760 | pred A=0.770 V=0.727 | encoder re-run (not lookup)
+  Top-5 similar songs (cosine):
+    id  938 | sim 0.9964 | A=0.72 V=0.79
+    id  632 | sim 0.9958 | A=0.87 V=0.71
+    id  607 | sim 0.9953 | A=0.70 V=0.65
+    id  537 | sim 0.9952 | A=0.76 V=0.75
+    id  743 | sim 0.9952 | A=0.86 V=0.76
+  ProtoPNet ante-hoc profile → predicted: HVHA (Happy)
+    HVHA (Happy)   activation 0.9805
+    HVLA (Calm)    activation 0.7156
+    LVHA (Angry)   activation 0.7430
+    LVLA (Sad)     activation 0.6949

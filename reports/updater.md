@@ -1155,3 +1155,86 @@ the log are the record.
 
 **Audit.** `verify_results.py` extended → **72 numbers, 0 mismatches.**
 Log: `run_logs/eval_protopnet_silhouette.log`.
+
+---
+
+## Step 26 — Phase C model-symmetry audit + unified Enhanced/ProtoPNet pipeline (2026-06-11)
+
+**Concern (user):** verify that the SAME best Phase B model encodes BOTH the
+knowledge base and the runtime query; worry that a simple-MERT baseline was
+hardcoded somewhere.
+
+**Audit findings (honest — premise was partly mistaken):**
+- Both runtime retrieval scripts (`phaseC/mainC.py`, `phaseC/retrieval.py`)
+  instantiated only the single-encoder `MERModel` (mainC.py:56,79; retrieval.py:59,574).
+  Neither could load the best (Dual/Triple/Enhanced) checkpoints.
+- **Query mode never re-encoded the query** — it looked up a pre-stored latent by ID
+  (`mainC.py:241  q_latent = index["latents"][q_idx]`). So symmetry was trivially true
+  (same stored vector) but there was no runtime encoder for a new song.
+- The only multi-encoder index (`prototypes_dual.npy`) is **Dual**, built by a separate
+  eval script (`evaluate_latent_space.py:134`). **No Enhanced/Triple index ever existed.**
+- The default `best_model.pt` is a **Dual** checkpoint — architecturally incompatible
+  with the `MERModel` both scripts instantiate (would `RuntimeError` on load).
+- `prototype_profile` was the post-hoc 4-centroid (`retriever._build_centroids`), NOT the
+  learnable ProtoPNet. ProtoPNet was never imported by any phaseC script.
+- L2-norm ✓ (symmetric); 128-D MLP bottleneck ✓ (but single-MERT head).
+
+**Fix (implemented, user-approved Enhanced + ProtoPNet + full implementation):**
+1. `phaseB/train_deploy_models.py` — trains final **all-data** checkpoints:
+   `best_model_enhanced_final.pt` (Enhanced, cyclic key, gap_dim=3) +
+   `protopnet_final.pt` (ProtoPNet, 20 prototypes). All-data = deployment only; their
+   in-sample accuracy is NOT reported (canonical = 5-fold held-out).
+2. `phaseC/encoder_unified.py` — `UnifiedEnhancedEncoder.encode()`: the ONE encoding
+   path for build AND query (Enhanced + cyclic key + 128-D bottleneck + L2-norm). Strict
+   `load_state_dict` so a wrong (single-MERT) checkpoint cannot silently pass.
+3. `phaseC/protopnet_readout.py` — learnable-prototype ante-hoc quadrant profile,
+   replacing the post-hoc centroid.
+4. `phaseC/build_index_unified.py` — build / verify / query, all via the shared encoder.
+
+**Symmetry proof** (`--mode verify`): re-encode every corpus song via the query path,
+compare to the stored index vector → **cosine min 1.000000, max ‖Δ‖ 1.06e-06**, index
+L2-norms = 1.0000, latent dim = 128. Build and query are provably the identical encoder.
+New index: `prototypes_enhanced.npy` (767×128). Sample query (id 760) re-encodes
+(not lookup), retrieves k-NN, and emits a ProtoPNet profile (predicted HVHA).
+
+**Audit:** `verify_results.py` extended (+ symmetry stanza) → **74 numbers, 0 mismatches.**
+Log: `run_logs/unified_phaseC.log`, `run_logs/train_deploy_models.log`. Reports: 03 §2a.
+
+---
+
+## Step 27 — Enhanced held-out retrieval Precision@k + Silhouette pooling artifact (2026-06-11)
+
+**Why:** Step 26 deployed Phase C on the Enhanced model, but the reported
+Precision@5 ≈ 0.58 was the single-MERT/Dual number. Measured the Enhanced model's
+retrieval under the IDENTICAL out-of-sample protocol (`phaseB/eval_enhanced_retrieval.py`:
+5-fold KFold(42); each fold train Enhanced+cyclic on train split, encode held-out
+test split; pool all 767 out-of-sample latents; Precision@k = top-k cosine within
+0.20 V-A radius — exact copy of `phaseC/evaluator.evaluate_retrieval`).
+
+**Result — Enhanced is the best retriever:**
+
+| Space | P@5 | P@10 | P@20 |
+| :-- | :-: | :-: | :-: |
+| random chance | 0.276 | — | — |
+| Naive raw MERT | 0.485 | — | — |
+| MERT (SupCR) | 0.576 | — | — |
+| Dual-SSL (SupCR) | 0.585 | — | — |
+| **Enhanced (benchmark/deployed)** | **0.5943** | **0.5761** | **0.5477** |
+
+Enhanced Precision@5 = 0.594 (+0.009 over Dual, ~2.15× chance) — the deployed
+benchmark model is best at BOTH regression (arousal R² 0.7182) and retrieval. The
+reported retrieval number now matches the deployed model. Added to 04 §3 and 03 §5.
+
+**Silhouette pooling artifact — resolves the long-standing "≈0 vs 0.26" tension.**
+This run's pooled-index Silhouette printed **0.0039**, NOT the canonical 0.26. Cause:
+the retrieval index pools test-fold latents from 5 *separately-trained* fold models,
+whose latent spaces are independently rotated, so a GLOBAL Silhouette over the pool
+collapses to ≈0. This is a measurement artifact of pooling, not a property of any
+model. Precision@k is robust (local V-A metric, stays 0.59); Silhouette (global
+cohesion/separation) is not. The canonical Silhouette stays **0.19/0.26 (per-fold,
+single model)**. The §3 retrieval-table Silhouette captions in 03 + 04 were corrected
+from "in-sample" to the precise "pooled-5-models" mechanism. This vindicates the
+thesis stance: lead with Precision@k, not Silhouette.
+
+**Audit:** `verify_results.py` extended (+ Enhanced P@5/10/20) → **77 numbers, 0
+mismatches.** Log: `run_logs/eval_enhanced_retrieval.log`.

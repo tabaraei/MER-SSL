@@ -347,17 +347,23 @@ if os.path.exists(IMG_LAYERS):
 # ── 4. Phase C ──
 s.append(Paragraph("4. Phase C — Explainability &amp; Ante-Hoc Prototypes", H1))
 s.append(Paragraph(
-    "<b>Retrieval works.</b> The system finds emotionally similar songs at about <b>twice the rate of "
-    "random chance</b> (Precision@5 ≈ 0.58 vs a random baseline of 0.276), and clearly better than the "
-    "raw untrained model (0.485).", BODY))
-pc = [[hdr("Latent space"), hdr("Precision@5"), hdr("Silhouette"), hdr("Post-hoc centroid acc")],
+    "<b>Retrieval works — and the deployed Enhanced model is the best retriever.</b> The system finds "
+    "emotionally similar songs at about <b>twice the rate of random chance</b> (random baseline 0.276); "
+    "the Enhanced model — the architecture actually deployed in Phase C — reaches the highest Precision@5 "
+    "(0.594), above Dual (0.585) and well above the raw untrained model (0.485).", BODY))
+pc = [[hdr("Latent space"), hdr("Precision@5"), hdr("Silhouette (pooled)"), hdr("Post-hoc centroid acc")],
       [cell("Naive raw MERT (untrained)"), cell("0.485", center=True), cell("+0.100", center=True), cell("—", center=True)],
       [cell("MERT (SupCR-trained)"), cell("0.576", center=True), cell("-0.029", center=True), cell("0.462", center=True)],
-      [cell("Dual MERT+wav2vec2 (SupCR)", bold=True), rc("0.585"), cell("+0.003", center=True), cell("0.506", center=True)]]
+      [cell("Dual MERT+wav2vec2 (SupCR)"), cell("0.585", center=True), cell("+0.003", center=True), cell("0.506", center=True)],
+      [cell("Enhanced (deployed benchmark)", bold=True), rc("0.594"), cell("+0.004", center=True), cell("0.728", center=True)]]
 tp = Table(pc, colWidths=[TW*0.37, TW*0.20, TW*0.20, TW*0.23]); tp.setStyle(tstyle()); s.append(tp)
 s.append(Spacer(1, 0.08*cm))
-s.append(Paragraph("Reference points: random-chance Precision@5 = 0.276. The Silhouette column is "
-                   "<i>in-sample</i> (older index); the canonical held-out value is ≈0.26 cosine (§3.6).", CAPTION))
+s.append(Paragraph("Reference points: random-chance Precision@5 = 0.276. The Silhouette column is the "
+                   "<i>pooled-5-models</i> retrieval-index value (pooling test-fold latents from 5 separately-"
+                   "trained models collapses a global Silhouette to ≈0 — a pooling artifact); the canonical "
+                   "per-fold value is ≈0.26 cosine (§3.6). Precision@k is robust to the pooling; Silhouette is "
+                   "not. The ProtoPNet column (0.728) is the learnable-prototype accuracy that replaces the "
+                   "post-hoc centroid.", CAPTION))
 s.append(Spacer(1, 0.1*cm))
 s.append(Paragraph(
     "<b>Ante-hoc prototypes — upgraded from fixed centroids to a learnable Audio ProtoPNet.</b> The "
@@ -380,6 +386,15 @@ s.append(Paragraph(
     "prototype is, by construction, evidence for one quadrant). This turns the weakest part of Phase C into "
     "a genuine, accurate, self-explaining classifier — the ante-hoc prototype model my supervisor asked for, "
     "now in substance, not just form.", BODY))
+s.append(Paragraph(
+    "<b>Pipeline unification &amp; model symmetry.</b> A symmetry audit found the original retrieval scripts "
+    "encoded only with the single-encoder MERT and never re-encoded the query (it was an index lookup). The "
+    "pipeline was unified onto a single <b>UnifiedEnhancedEncoder</b> (Enhanced multi-encoder + cyclic key + "
+    "128-D bottleneck + L2-norm) used by <i>both</i> index build and query, with the ProtoPNet ante-hoc "
+    "readout. Symmetry is now guaranteed by construction and proven empirically: re-encoding every corpus "
+    "song via the query path reproduces the stored index vector to <b>cosine 1.000000 (max ‖Δ‖ 1.1×10⁻⁶)</b>. "
+    "(The deployment checkpoint is all-data; its in-sample accuracy is not reported — canonical metrics remain "
+    "the 5-fold held-out values.)", BODY))
 
 # ── 5. Honest limitations ──
 s.append(Paragraph("5. Honest Limitations (what did not work)", H1))

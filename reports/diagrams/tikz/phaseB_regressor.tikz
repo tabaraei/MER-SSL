@@ -1,0 +1,120 @@
+% Phase B — Multi-Encoder Affective Regressor (TikZ).
+% Requires in the preamble:
+%   \usepackage{tikz}
+%   \usetikzlibrary{positioning,calc,fit,backgrounds,arrows.meta,shadows,decorations.pathreplacing}
+\definecolor{cFroz}{HTML}{E5E7EB}\definecolor{dFroz}{HTML}{9CA3AF}
+\definecolor{cTrn}{HTML}{D1FAE5} \definecolor{dTrn}{HTML}{10B981}
+\definecolor{cLat}{HTML}{FEF3C7} \definecolor{dLat}{HTML}{D97706}
+\definecolor{cOut}{HTML}{FEE2E2} \definecolor{dOut}{HTML}{EF4444}
+\definecolor{cLos}{HTML}{EDE9FE} \definecolor{dLos}{HTML}{8B5CF6}
+\definecolor{cDat}{HTML}{DBEAFE} \definecolor{dDat}{HTML}{3B82F6}
+\definecolor{cSec}{HTML}{F1F5F9} \definecolor{dSec}{HTML}{CBD5E1}
+\begin{tikzpicture}[
+    font=\scriptsize,
+    >={Stealth[length=2mm]},
+    base/.style={rounded corners=2pt, draw, line width=0.5pt, align=center,
+                 minimum width=20mm, minimum height=8mm, inner sep=2pt},
+    froz/.style={base, fill=cFroz, draw=dFroz},
+    stack/.style={base, fill=cFroz, draw=dFroz, minimum height=15mm, minimum width=22mm},
+    trn/.style ={base, fill=cTrn,  draw=dTrn},
+    lat/.style ={base, fill=cLat,  draw=dLat, line width=0.9pt, font=\scriptsize\bfseries},
+    outp/.style={base, fill=cOut,  draw=dOut},
+    los/.style ={base, fill=cLos,  draw=dLos, minimum width=14mm, minimum height=6mm},
+    dat/.style ={base, fill=cDat,  draw=dDat},
+    flow/.style={->, line width=0.7pt, draw=black!65},
+    tag/.style ={midway, font=\tiny\itshape, text=black!60, fill=white, inner sep=1pt},
+  ]
+
+  % ---------- input ----------
+  \node[dat] (aud) at (-2.6,2.6) {PMEmo\\audio};
+
+  % ---------- frozen backbone layer-stacks ----------
+  \node[stack] (mert) at (1.2,5.0) {};
+  \node[stack] (w2v)  at (1.2,2.6) {};
+  \node[dat]   (theo) at (1.2,0.1) {Music-theory feat.\\tempo + cyclic key};
+
+  % top labels for the stacks
+  \node[anchor=north, font=\scriptsize, text=black!75] at ($(mert.north)+(0,-0.4pt)$) {MERT \emph{(frozen)}};
+  \node[anchor=north, font=\scriptsize, text=black!75] at ($(w2v.north)+(0,-0.4pt)$)  {wav2vec2 \emph{(frozen)}};
+
+  % ---------- trainable fusion ----------
+  \node[trn] (f1) at (4.7,5.0) {Weighted Layer\\Fusion $\sum w_i\mathbf{h}_i$};
+  \node[trn] (f2) at (4.7,2.6) {Weighted Layer\\Fusion $\sum w_i\mathbf{h}_i$};
+  \node[trn] (f3) at (4.7,0.1) {Theory MLP};
+
+  \node[trn, minimum height=44mm, minimum width=11mm, text width=10mm]
+        (cat) at (7.2,2.6) {Con\-cat\-en\-ate};
+
+  % ---------- latent + regression band ----------
+  \node[trn] (bn)   at (7.2,-2.6) {MLP bottleneck};
+  \node[lat] (z)    at (9.7,-2.6) {Latent $\mathbf{z}$\\$128$-d, $L_2$};
+  \node[trn] (head) at (12.1,-2.6){Linear\\V-A head};
+  \node[outp] (va)  at (14.3,-2.6){Valence,\\Arousal};
+
+  % ---------- hybrid objective ----------
+  \node[los] (lsup) at (8.7,-5.1) {$\mathcal{L}_{\text{SupCR}}$ 0.1};
+  \node[los] (lrnk) at (10.4,-5.1){$\mathcal{L}_{\text{Rank}}$ 0.3};
+  \node[los] (lccc) at (12.1,-5.1){$\mathcal{L}_{\text{CCC}}$ 0.5};
+  \node[los] (lmse) at (13.8,-5.1){$\mathcal{L}_{\text{MSE}}$ 1.0};
+
+  \node[trn, fill=cTrn!60, draw=dTrn, minimum width=44mm, align=center] (tr) at (2.4,-3.7)
+        {\textbf{Training interventions}\\differential optimiser (fusion lr $10^{-2}$)\\balanced sampler (inverse quadrant freq.)};
+
+  % ---------- layer-stack detailing (internal divisions + depth shadow) ----------
+  \begin{scope}[on background layer]
+    \foreach \n in {mert,w2v}{
+      \foreach \i in {1,2,3}{
+        \draw[stack] ($(\n.south west)+(\i*2.6pt,\i*2.6pt)$)
+                     rectangle ($(\n.north east)+(\i*2.6pt,\i*2.6pt)$);
+      }
+    }
+  \end{scope}
+  \foreach \n in {mert,w2v}{
+    \foreach \i in {1,...,4}{
+      \draw[dFroz, line width=0.3pt]
+        ($(\n.south west)!{\i*0.17}!(\n.north west)$) -- ($(\n.south east)!{\i*0.17}!(\n.north east)$);
+    }
+  }
+  % brace annotating the layer count
+  \draw[decorate, decoration={brace, amplitude=3pt}, dFroz]
+       ($(mert.north east)+(4pt,8pt)$) -- ($(mert.south east)+(4pt,2pt)$)
+       node[midway, right=4pt, align=left, font=\tiny, text=black!60]{25 layers\\$\times$1024-d};
+  \draw[decorate, decoration={brace, amplitude=3pt}, dFroz]
+       ($(w2v.north east)+(4pt,8pt)$) -- ($(w2v.south east)+(4pt,2pt)$)
+       node[midway, right=4pt, align=left, font=\tiny, text=black!60]{13 layers\\$\times$768-d};
+
+  % ---------- edges ----------
+  \draw[flow] (aud) -- (mert);
+  \draw[flow] (aud) -- (w2v);
+  \draw[flow] (aud) -- (theo);
+  \draw[flow] (mert) -- (f1);
+  \draw[flow] (w2v)  -- (f2);
+  \draw[flow] (theo) -- (f3);
+  \draw[flow] (f1) -- (cat) node[tag]{1024};
+  \draw[flow] (f2) -- (cat) node[tag]{768};
+  \draw[flow] (f3) -- (cat);
+  \draw[flow] (cat) -- (bn);
+  \draw[flow] (bn) -- (z);
+  \draw[flow] (z) -- (head);
+  \draw[flow] (head) -- (va);
+
+  % training signals (dashed)
+  \draw[->, dashed, draw=dLos] (lmse.north) -- (va.south)
+        node[pos=0.55, right=1pt, font=\tiny\itshape, text=dLos]{supervises};
+  \draw[->, dashed, draw=dLat] (lsup.north) -- (z.south)
+        node[pos=0.55, right=1pt, font=\tiny\itshape, text=dLat]{shapes latent};
+  \draw[->, dashed, draw=dTrn] (tr.east) -- (bn.south west);
+
+  % ---------- section backgrounds ----------
+  \begin{scope}[on background layer]
+    \node[fill=cSec, rounded corners=4pt, fit=(mert)(w2v)(theo),
+          inner sep=8pt, label={[font=\scriptsize\bfseries,text=black!55]above:Frozen SSL encoders}] {};
+    \node[fill=cSec, rounded corners=4pt, fit=(f1)(f2)(f3)(cat),
+          inner sep=7pt, label={[font=\scriptsize\bfseries,text=black!55]above:Trainable fusion}] {};
+    \node[fill=cSec, rounded corners=4pt, fit=(bn)(z)(head)(va),
+          inner sep=7pt, label={[font=\scriptsize\bfseries,text=black!55]above:Shared latent + V-A regression}] {};
+    \node[fill=cLos!40, rounded corners=4pt, fit=(lmse)(lccc)(lrnk)(lsup),
+          inner sep=6pt, label={[font=\tiny\bfseries,text=dLos]below:Hybrid objective}] {};
+  \end{scope}
+
+\end{tikzpicture}
