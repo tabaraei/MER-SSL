@@ -880,7 +880,7 @@ where $c(j)$ is the quadrant of prototype $j$ and $y_{i}$ the label of excerpt $
 \section{Evaluation Protocol}
 \label{sec:protocol}
 
-All quantitative claims in Chapter~\ref{chap:test} follow a single, fixed protocol to guarantee comparability and reproducibility. Regression and retrieval are evaluated under $5$-fold cross-validation with a fixed random seed, so that every excerpt is scored by a model that never trained on it. Regression quality is reported as $R^{2}$ and CCC per affective dimension; retrieval quality as Precision@$k$, defined as the mean fraction of an excerpt's top-$k$ latent neighbours that lie within a fixed V--A radius; latent geometry as the quadrant Silhouette coefficient; and the prototype classifier as both raw and class-balanced accuracy, the latter being the fairer measure under the dataset's imbalance. To prevent post-hoc rationalisation of noise, each ablation is held to a \emph{pre-registered} decision rule: a treatment is considered to improve on a baseline only when it exceeds the per-fold standard deviation, and differences within that band are reported as ties rather than gains. Every reported figure is traceable to a logged experimental run, and numerical consistency across the manuscript is enforced by an automated audit. Against this protocol, the following chapter presents the results --- including the experiments in which the system's own hypotheses were refuted.
+All quantitative claims in Chapter~\ref{chap:test} follow a single, fixed protocol to guarantee comparability and reproducibility. Regression and retrieval are evaluated under $5$-fold cross-validation with a fixed random seed, so that every excerpt is scored by a model that never trained on it. Regression quality is reported as $R^{2}$ and CCC per affective dimension; retrieval quality as Precision@$k$, defined as the mean fraction of an excerpt's top-$k$ latent neighbours that lie within a fixed V--A radius; latent geometry as the quadrant Silhouette coefficient; and the prototype classifier as both raw and class-balanced accuracy, the latter being the fairer measure under the dataset's imbalance. The choice of $R^{2}$ and CCC for the main task is deliberate. PMEmo provides continuous valence--arousal annotations, and the system performs continuous regression, so a regression metric is the only faithful measure of its output. Reporting classification accuracy instead would require binning the continuous labels into discrete classes, which discards information about how close each prediction lies to the target and would contradict the dimensional model of affect that this work validates (Section~\ref{sec:results-topology}). Accuracy is therefore reserved for the one genuinely discrete sub-task --- the prototype classifier --- while $R^{2}$ and CCC govern the continuous prediction. This also keeps the comparison with prior work fair, since the directly comparable state-of-the-art systems report $R^{2}$ on the same corpus. To prevent post-hoc rationalisation of noise, each ablation is held to a \emph{pre-registered} decision rule: a treatment is considered to improve on a baseline only when it exceeds the per-fold standard deviation, and differences within that band are reported as ties rather than gains. Every reported figure is traceable to a logged experimental run, and numerical consistency across the manuscript is enforced by an automated audit. Against this protocol, the following chapter presents the results --- including the experiments in which the system's own hypotheses were refuted.
 
 %
 %			CHAPTER 5: Tests
@@ -918,23 +918,34 @@ Triple-bio (MERT + mel + EDA)    & 0.7077 & 0.5706 & 0.8262 & 0.7325 \\
 \label{tab:phaseB}
 \end{table}
 
-Table~\ref{tab:sota} places these numbers against the literature on the same corpus. The comparison must be read exactly. On \emph{valence}, the proposed system is state of the art among audio-only methods: its $R^{2}$ of $0.576$ exceeds both the single-dataset and the multi-task variants of Music2Emo~\cite{kang_towards_2025} ($0.536$ and $0.547$). On \emph{arousal}, the picture is honest rather than triumphant: the system is highly competitive at $0.718$, but it does not lead, since Music2Emo reaches $0.777$ and $0.794$ by training on four datasets at once. This trade-off is deliberate and central to the thesis. The contribution is not a marginal accuracy record. It is a system that matches or exceeds the audio-only state of the art on the harder valence axis \emph{while} adding a strictly ante-hoc, self-explaining retrieval and prototype layer that the competing systems do not provide.
+Table~\ref{tab:sota} places these numbers against the full body of prior work on the same corpus. The comparison must be read carefully, because the published methods differ in the data they use, and conflating those differences would be misleading. Three groups must be distinguished. The \emph{single-dataset, PMEmo-only} group --- the fair audio-only peers --- comprises the original PMEmo baselines~\cite{zhang_pmemo_2018}, the source-separation CNNs of EmoMucs~\cite{deberardinis_emomucs_2020}, the hand-crafted AutoML system of Simonetta et al.~\cite{simonetta_joint_2024}, and the single-dataset variant of Music2Emo~\cite{kang_towards_2025}. Against this group, the proposed Triple model is the strongest on \emph{valence} ($R^{2}=0.576$), ahead of Music2Emo ($0.536$), AutoML openSMILE ($0.525$), and EmoMucs. The second group trains on \emph{additional data}: Music2Emo's multi-task variant uses four datasets, and the AutoML--Joint system mixes PMEmo with the IADS-E environmental-sound corpus. These reach higher scores --- AutoML--Joint in particular reports $0.780/0.861$ --- but they are not audio-only PMEmo-only results. The AutoML--Joint row is especially informative: it is precisely the cross-domain joint-training strategy that Section~\ref{sec:results-iadse} shows \emph{fails} to transfer when the features are self-supervised rather than hand-crafted. It therefore sets the upper bar and, at the same time, frames this thesis's central negative finding.
+
+On \emph{arousal} the position is reported honestly: the proposed system is competitive at $0.718$ but does not lead, since Music2Emo ($0.777/0.794$) and AutoML ($0.727$) score higher. This trade-off is deliberate. The contribution is not a marginal accuracy record on arousal. It is a system that is state of the art on the harder valence axis among audio-only PMEmo-only methods, \emph{while} adding a strictly ante-hoc, self-explaining retrieval and prototype layer that none of the competing systems provide.
 
 \begin{table}[t]
 \centering
 \small
-\begin{tabular}{lccl}
+\begin{tabular}{llccl}
 \toprule
-\textbf{Method} & \textbf{Valence $R^{2}$} & \textbf{Arousal $R^{2}$} & \textbf{Notes} \\
+\textbf{Method / Architecture} & \textbf{Year} & \textbf{Valence $R^{2}$} & \textbf{Arousal $R^{2}$} & \textbf{Data / notes} \\
 \midrule
-PMEmo baseline~\cite{zhang_pmemo_2018}   & --    & --    & hand-crafted + SVR \\
-Music2Emo (single dataset)~\cite{kang_towards_2025} & 0.536 & 0.777 & MERT + chord/key \\
-Music2Emo (multi-task)~\cite{kang_towards_2025}     & 0.547 & 0.794 & four datasets \\
-\textbf{This work --- Triple} & \textbf{0.576} & 0.702 & best audio-only valence \\
-\textbf{This work --- Enhanced} & 0.569 & \textbf{0.718} & best arousal (ours) \\
+\multicolumn{5}{l}{\textit{Prior work --- single-dataset, PMEmo only}}\\
+Zhang et al., IS13 + SVR/MLR~\cite{zhang_pmemo_2018} & 2018 & ${\sim}0.41^{*}$ & ${\sim}0.52^{*}$ & baselines; $^{*}r^{2}$-derived \\
+EmoMucs C1D-M~\cite{deberardinis_emomucs_2020}       & 2020 & 0.349 & 0.557 & 1D CNN; labels $[-1,1]$ \\
+EmoMucs C2D-M~\cite{deberardinis_emomucs_2020}       & 2020 & 0.414 & 0.610 & 2D CNN; labels $[-1,1]$ \\
+AutoML openSMILE~\cite{simonetta_joint_2024}         & 2024 & 0.525 & 0.727 & hand-crafted \\
+Music2Emo~\cite{kang_towards_2025}                   & 2025 & 0.536 & 0.777 & MERT + chord/key \\
+\midrule
+\multicolumn{5}{l}{\textit{Prior work --- additional / cross-domain training data}}\\
+Music2Emo, multi-task~\cite{kang_towards_2025}       & 2025 & 0.547 & 0.794 & + 4 datasets \\
+AutoML--Joint~\cite{simonetta_joint_2024}            & 2024 & 0.780 & 0.861 & PMEmo + IADS-E (joint) \\
+\midrule
+\multicolumn{5}{l}{\textit{This work (PMEmo only, audio)}}\\
+\textbf{Triple (MERT + w2v2 + mel-CNN)}              & 2026 & \textbf{0.576} & 0.702 & best PMEmo-only valence \\
+\textbf{Enhanced (+ tempo/key)}                      & 2026 & 0.569 & \textbf{0.718} & our best arousal \\
 \bottomrule
 \end{tabular}
-\caption{Comparison with prior work on PMEmo. The proposed system leads on audio-only valence; on arousal it is competitive but trails the multi-dataset Music2Emo. Its distinguishing contribution is ante-hoc explainability, not an accuracy record.}
+\caption{Comparison with prior work on PMEmo, grouped by the data each method uses. Among single-dataset PMEmo-only methods, the proposed Triple model leads on valence ($0.576$); on arousal the system is competitive but trails. The cross-domain AutoML--Joint result ($0.780/0.861$) is the overall bar but relies on joint training with environmental sounds --- the same strategy that fails for self-supervised features (Section~\ref{sec:results-iadse}). The distinguishing contribution is ante-hoc explainability, not an accuracy record. $^{*}$Zhang et al. report Pearson's $r$; entries are squared approximations ($R^{2}\approx r^{2}$). EmoMucs uses labels scaled to $[-1,1]$, so its $R^{2}$ is not perfectly commensurable. External numbers should be confirmed against their primary sources.}
 \label{tab:sota}
 \end{table}
 
