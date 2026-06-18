@@ -924,29 +924,30 @@ On \emph{arousal} the position is reported honestly: the proposed system is comp
 
 \begin{table}[t]
 \centering
-\small
-\begin{tabular}{llccl}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l c c c l l}
 \toprule
-\textbf{Method / Architecture} & \textbf{Year} & \textbf{Valence $R^{2}$} & \textbf{Arousal $R^{2}$} & \textbf{Data / notes} \\
+\textbf{Method} & \textbf{Year} & \textbf{Valence $R^{2}$} & \textbf{Arousal $R^{2}$} & \textbf{Eval.\ protocol} & \textbf{Method / setup} \\
 \midrule
-\multicolumn{5}{l}{\textit{Prior work --- single-dataset, PMEmo only}}\\
-Zhang et al., IS13 + SVR/MLR~\cite{zhang_pmemo_2018} & 2018 & ${\sim}0.41^{*}$ & ${\sim}0.52^{*}$ & baselines; $^{*}r^{2}$-derived \\
-EmoMucs C1D-M~\cite{deberardinis_emomucs_2020}       & 2020 & 0.349 & 0.557 & 1D CNN; labels $[-1,1]$ \\
-EmoMucs C2D-M~\cite{deberardinis_emomucs_2020}       & 2020 & 0.414 & 0.610 & 2D CNN; labels $[-1,1]$ \\
-AutoML openSMILE~\cite{simonetta_joint_2024}         & 2024 & 0.525 & 0.727 & hand-crafted \\
-Music2Emo~\cite{kang_towards_2025}                   & 2025 & 0.536 & 0.777 & MERT + chord/key \\
-Ching \& Widmer, Jukebox + MLP~\cite{ching_data_2025} & 2025 & 0.51 & 0.72 & deep embedding; in-dist.$^{\dagger}$ \\
+\multicolumn{6}{l}{\textit{Prior work --- single-dataset, PMEmo only}}\\
+Zhang et al.~\cite{zhang_pmemo_2018}            & 2018 & ${\sim}0.41^{*}$ & ${\sim}0.52^{*}$ & Static 90/10    & IS13 + SVR/MLR; $^{*}r^{2}$-derived \\
+EmoMucs C1D-M~\cite{deberardinis_emomucs_2020} & 2020 & 0.349 & 0.557 & 5-Fold CV       & 1D CNN, separated stems; labels $[-1,1]$ \\
+EmoMucs C2D-M~\cite{deberardinis_emomucs_2020} & 2020 & 0.414 & 0.610 & 5-Fold CV       & 2D CNN, separated stems; labels $[-1,1]$ \\
+AutoML openSMILE~\cite{simonetta_joint_2024}   & 2024 & 0.525 & 0.727 & 5-Fold CV       & openSMILE features + AutoML \\
+Music2Emo~\cite{kang_towards_2025}             & 2025 & 0.536 & 0.777 & Static 70/15/15 & MERT + chord/key features \\
+Ching \& Widmer~\cite{ching_data_2025}         & 2025 & $0.51^{\dagger}$ & $0.72^{\dagger}$ & Static 80/10/10 & Jukebox embeddings + MLP; $^{\dagger}$in-dist.\ diagonal \\
 \midrule
-\multicolumn{5}{l}{\textit{Prior work --- additional / cross-domain training data}}\\
-Music2Emo, multi-task~\cite{kang_towards_2025}       & 2025 & 0.547 & 0.794 & + 4 datasets \\
-AutoML--Joint~\cite{simonetta_joint_2024}            & 2024 & 0.780 & 0.861 & PMEmo + IADS-E (joint) \\
+\multicolumn{6}{l}{\textit{Prior work --- additional / cross-domain training data}}\\
+Music2Emo, multi-task~\cite{kang_towards_2025} & 2025 & 0.547 & 0.794 & Static 70/15/15 & multi-task; 4 datasets \\
+AutoML--Joint~\cite{simonetta_joint_2024}      & 2024 & 0.780 & 0.861 & 5-Fold CV       & joint PMEmo + IADS-E sounds \\
 \midrule
-\multicolumn{5}{l}{\textit{This work (PMEmo only, audio)}}\\
-\textbf{Triple (MERT + w2v2 + mel-CNN)}              & 2026 & \textbf{0.576} & 0.702 & best PMEmo-only valence \\
-\textbf{Enhanced (+ tempo/key)}                      & 2026 & 0.569 & \textbf{0.718} & our best arousal \\
+\multicolumn{6}{l}{\textit{This work (PMEmo only, audio)}}\\
+\textbf{Triple (MERT + w2v2 + mel-CNN)}        & 2026 & \textbf{0.576} & 0.702 & 5-Fold CV       & three-stream SSL fusion \\
+\textbf{Enhanced (+ tempo/key)}                & 2026 & 0.569 & \textbf{0.718} & 5-Fold CV       & adds music-theory gap features \\
 \bottomrule
-\end{tabular}
-\caption{Comparison with prior work on PMEmo, grouped by the data each method uses. Among single-dataset PMEmo-only methods, the proposed Triple model leads on valence ($0.576$); on arousal the system is competitive but trails. The cross-domain AutoML--Joint result ($0.780/0.861$) is the overall bar but relies on joint training with environmental sounds --- the same strategy that fails for self-supervised features (Section~\ref{sec:results-iadse}). The distinguishing contribution is ante-hoc explainability, not an accuracy record. $^{*}$Zhang et al. report Pearson's $r$; entries are squared approximations ($R^{2}\approx r^{2}$). EmoMucs uses labels scaled to $[-1,1]$, so its $R^{2}$ is not perfectly commensurable. $^{\dagger}$The Ching \& Widmer value is the in-distribution ($\text{PMEmo}\!\rightarrow\!\text{PMEmo}$) diagonal of their cross-dataset matrix (Jukebox embeddings + MLP, $R^{2}$); the proposed Triple model leads it on valence ($0.576$ vs.\ $0.51$) while the two are level on arousal ($0.718$ vs.\ $0.72$). External numbers should be confirmed against their primary sources.}
+\end{tabular}%
+}
+\caption{Comparison with prior work on PMEmo, grouped by the data each method uses and annotated with each method's \emph{evaluation protocol}. The protocol column is essential to a fair reading: cross-validated scores (5-fold CV, averaged over all folds) and single fixed-split scores (e.g.\ static $70/15/15$ or $90/10$) are not perfectly commensurable, because one favourable split can inflate a number that cross-validation would average down. Among single-dataset PMEmo-only methods, the proposed Triple model leads on valence ($R^{2}=0.576$), ahead of Music2Emo ($0.536$), AutoML openSMILE ($0.525$), and the Jukebox embedding of Ching \& Widmer ($0.51$); on arousal the Enhanced model ($0.718$) is level with that Jukebox embedding ($0.72$) but trails methods that add chord/key supervision or extra data. The cross-domain AutoML--Joint result ($0.780/0.861$) is the overall bar but relies on joint training with the IADS-E environmental-sound corpus --- the same strategy that fails for self-supervised features (Section~\ref{sec:results-iadse}). The distinguishing contribution is ante-hoc explainability, not an accuracy record. $^{*}$Zhang et al.\ report Pearson's $r$; entries are squared approximations ($R^{2}\approx r^{2}$). EmoMucs uses labels scaled to $[-1,1]$, so its $R^{2}$ is not perfectly commensurable. $^{\dagger}$The Ching \& Widmer value is the in-distribution ($\text{PMEmo}\!\rightarrow\!\text{PMEmo}$) diagonal of their cross-dataset matrix (Jukebox embeddings + MLP). Protocol descriptions and external numbers follow each method's primary source and should be confirmed there.}
 \label{tab:sota}
 \end{table}
 
