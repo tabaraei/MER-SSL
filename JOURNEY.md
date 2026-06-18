@@ -18,9 +18,9 @@ I used MERT as a frozen model. Frozen means I did not change MERT itself at all 
 
 But before trusting it, I needed to check that MERT actually contains musically meaningful information. I did this with probing. Probing means attaching a very simple model to MERT's output and seeing whether that simple model can recover a known musical fact — if a simple model succeeds, the information must already be sitting there in MERT's representation. I probed for two things: harmonic mode (whether a song is in a major or minor key, roughly "bright" vs "dark") and tempo (how fast it is in beats per minute).
 
-The results were telling. For major versus minor, the probe hit 100% accuracy — meaning MERT perfectly separates bright-sounding from dark-sounding music, so harmony is clearly baked into it. Tempo was much weaker, with a score (R²) of about 0.12, which means the simple probe could only explain about 12% of the variation in song speed — so MERT knows speed only vaguely. That gap didn't worry me; it told me where MERT is strong and where it might need help later.
+The results were telling, but only once I measured them honestly. My first quick probes seemed to show ~100% accuracy on major-versus-minor and a tempo R² of about 0.12 — and both turned out to be misleading. The mode "label" was a degenerate proxy: it just thresholded overall chroma loudness, so almost every song fell on one side and a trivial constant guess scored ~100%. And the 0.12 tempo number came from an early one-off probe I never logged. When I redid this properly — estimating real major/minor with the standard Krumhansl–Schmuckler method, and sweeping a clean Ridge probe across all 25 of MERT's layers — the honest picture was different. MERT knows major-versus-minor only modestly (about 67% accuracy, best at a middle layer), and it is essentially *blind* to absolute tempo: the tempo R² is actually **negative** (about −0.83 at the best single layer, and −2.1 when all layers are pooled together). A negative R² means the probe does *worse than just guessing the average speed for every song* — there is no linear direction inside MERT that tracks tempo, so trying to read one off only fits noise. Far from worrying me, that sharp gap was the most useful thing Phase A gave me: it told me precisely where MERT is strong (harmony, timbre) and where it would need an explicit helping hand later (tempo and key).
 
-**The takeaway: before building anything fancy, I confirmed MERT genuinely carries musical meaning — strongly for harmony, weakly for tempo — which gave me a solid, evidence-based foundation to build on.**
+**The takeaway: before building anything fancy, I confirmed MERT genuinely carries musical meaning — clearly for harmony and timbre, but not for absolute tempo and only weakly for key — which gave me a solid, evidence-based map of where to build and where to compensate.**
 
 ## Building the emotion prediction model (Phase B)
 
@@ -99,6 +99,33 @@ With a trustworthy foundation, I built the part that actually predicts emotion. 
 
 So I used a four-part loss. A loss is just the score the model tries to make as small as possible during training; combining four of them means the model has to satisfy four different definitions of "good" at once. The first part simply checks how far off the predicted numbers are. The second part checks that the predictions rise and fall in step with the real emotions without sitting at a constant offset (this one, called CCC, is the strict standard in emotion research). The third part makes sure songs end up in the right *order* from low to high energy, even if the exact numbers are a little off. And the fourth part — the most important for later — pulls songs that feel similar close together inside the model's internal map, so emotionally similar songs end up as neighbours. That last one quietly set up the explanation system I'd build in Phase C.
 
+
+
+In my Phase B emotion prediction model (such as the "Enhanced" architecture), I designed a four-part objective called the Hybrid Loss. Because a single error metric cannot capture all the ways emotion prediction fails, I used four distinct loss terms with the following specific weights
+:
+MSE (Mean Squared Error): Weight = 1.0
+CCC (Concordance Correlation Coefficient): Weight = 0.5
+Rank Loss (Soft Spearman): Weight = 0.3
+SupCR (Supervised Contrastive Regression): Weight = 0.1
+To answer your question directly: no, they are not all applied to the same part of the model. The loss function is specifically split into two different architectural locations to achieve two completely different mathematical goals.
+
+Here is exactly where and how they are used:
+1. Supervising the Final Output (The Regression Head) The MSE (1.0), CCC (0.5), and Rank (0.3) losses are all applied at the very end of the network, directly to the final 2D regression output (the predicted Valence and Arousal coordinates)
+.
+Why here? These three terms evaluate the final prediction. MSE forces the model to get the exact numerical coordinates right. CCC ensures the predictions accurately track the variance and mean of the human annotations. The Rank loss ensures the ordinal sorting of the songs from low-to-high energy is preserved
+.
+
+2. Shaping the Intermediate Latent Space (The Bottleneck) The SupCR (0.1) loss is applied one layer earlier in the model—specifically to the 128-dimensional L 
+2
+​
+ -normalized latent vector (the bottleneck output) just before it goes into the final regression head
+.
+Why here? The goal of SupCR is not to calculate coordinate errors, but to act as a geometric anchor. It shapes the intermediate topological space during gradient descent, pulling the 128-D representations of emotionally similar songs closer together
+. I deliberately applied it here because Phase C (our Explainable RAG system) cuts off the regression head and uses this exact 128-D latent space to perform its k-Nearest Neighbors (k-NN) retrieval. Without applying SupCR directly to the latent bottleneck, the retrieval system would just pull random songs instead of emotionally coherent ones
+.
+By splitting the loss this way, my model learns to project raw audio into a geometrically organized continuous manifold (guided by SupCR at the bottleneck) while still outputting highly accurate circumplex coordinates (guided by MSE+CCC+Rank at the final head)
+
+
 Two real problems showed up during training. The first was that the part of my model that decides how much to listen to each of MERT's internal layers simply wasn't learning — it was treating every layer equally and refusing to develop preferences. I fixed this by letting that specific part learn much faster than the rest of the model (giving it a bigger learning rate), which finally let it form opinions about which layers matter. The second problem was that my dataset, PMEmo (about 767 pop-song clips rated by listeners), is lopsided — most songs are upbeat and happy. A lazy model could score well just by guessing "happy" most of the time. I fixed this by showing the rarer emotions (sad, calm, angry songs) more often during training, so the model couldn't coast on the majority.
 
 The results, in plain terms: the model reached an arousal score (R²) of about 0.65, meaning it explains roughly 65% of the variation in how energetic songs are — quite good. Valence landed near 0.51, explaining about half the variation in how positive a song feels — noticeably harder. That valence gap turned out to be a theme of the whole project: how positive a song feels often depends on lyrics and culture, not just sound, so audio-only systems hit a ceiling there.
@@ -142,6 +169,29 @@ To make the explanations concrete, I leaned on the four emotion quadrants — th
 This is also where my supervisor pushed me on a key distinction: ante-hoc versus post-hoc explanation. Post-hoc means explaining a black box after the fact, guessing at its reasoning. Ante-hoc means the system's reasoning is transparent *by design* — the explanation is the actual decision process, not a story told afterward. My supervisor strongly preferred ante-hoc, because a guessed explanation can be wrong in ways you can't detect. My retrieval system is ante-hoc at its core: the decision genuinely *is* "these real songs are the nearest neighbours," so the explanation is faithful rather than invented.
 
 **The takeaway: I learned that a trustworthy explanation isn't decoration added at the end — it has to be the model's real reasoning, and designing for that honesty changed how I judged the whole system.**
+
+
+The Old Method: The Fixed 4-Centroid Readout (The Failure) Initially, I used a very simple method. After the Phase B encoder finished training and organized the songs into the 128-dimensional latent space, I ran a simple script to find the mathematical center (the "centroid") of the four emotion quadrants
+.
+How it worked: When a new song came in, the system measured its distance to these four fixed points and said, "It is closest to the Happy center."
+Why it failed: Because these centers were fixed after training, it was technically a post-hoc guess, not a true ante-hoc classifier
+. Worse, it performed terribly. It achieved an accuracy of only 50.6%, which actually lost to a "dumb" baseline of just guessing the majority class "Happy" every single time (61.1%)
+. It was especially bad at finding "Sad" songs, successfully recognizing them only 17% of the time
+.
+
+
+
+The Upgrade: The Audio ProtoPNet (The Success) To fix this, I rebuilt the classifier using an Audio ProtoPNet (Prototypical Part Network)
+. Instead of calculating fixed centers after the fact, the ProtoPNet is a learnable prototype network
+.
+How it works: Inside the 128-D latent space, I initialized 20 prototype vectors (5 for each of the 4 emotion quadrants)
+. Instead of keeping them frozen, these prototypes are updated during gradient descent
+. The network is trained with separation losses to actively push these prototypes to the exact spots in the space where the classes are actually separable
+.
+How it makes decisions: When a song enters the network, the model calculates its L2 distance to all 20 prototypes
+. It uses an "identity prior," meaning a prototype assigned to the "Sad" category is mathematically only allowed to cast a vote for the "Sad" class
+. The song is classified purely based on which prototypes it is geometrically closest to
+.
 
 ## Trying to push the results further — adding wav2vec2 (Dual-SSL)
 

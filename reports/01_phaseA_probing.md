@@ -26,7 +26,24 @@ Two probe families:
 
 | Probe | Target | Result | Reading |
 | :-- | :-- | :-: | :-- |
-| Tempo | BPM | **R² ≈ 0.12** | Speed is only weakly/coarsely encoded |
+| Tempo (different probe, *superseded headline*) | BPM | R² ≈ 0.12 | Single pre-pooled embedding + Adam probe — see note |
+
+> **Superseded as the headline — use the §3 per-layer value instead, but the number is real.**
+> This R² ≈ 0.12 comes from `probe_tempo.py`: an Adam-trained `Linear(1024→1)`, 200 epochs, on
+> the single *pre-pooled* MERT embedding (`pmemo_mert_embeddings.pt`, one 1024-d vector/song).
+> It was reproduced on 2026-06-17 (R² = 0.1191, log:
+> `run_logs/phaseA_probe_tempo_single_embedding.log`), so it is now audit-traceable. It differs
+> from the §3 sweep for two reasons: (i) **different input** — a single default-pooled layer vs
+> the sweep's per-layer features (whose best single layer is layer 0, a poor tempo carrier) and
+> all-layer mean; (ii) **implicit regularization** — 200 epochs of Adam never reaches the
+> least-squares solution (final train MSE 0.62, not 0), so predictions shrink toward the mean
+> and avoid the held-out overfit that drives the closed-form Ridge probe negative. The audited
+> per-layer Ridge sweep in §3 finds tempo R² **negative** (−0.8307 best layer, −2.1155 pooled).
+> Both readings agree tempo is a *gap*, but they are not the same conclusion — 0.12 reads
+> "weakly decodable from the default embedding", the negative R² reads "not linearly recoverable
+> from any single layer or the layer-mean (worse than predicting the mean)". The negative value
+> is the **canonical headline** because it is the systematic, all-layer audit
+> (`music_theory_probing_results.json`); the 0.12 is a narrower, more favourable special case.
 
 > **Discarded early result — do not cite.** An exploratory script (`probe_key.py`)
 > reported "~100% accuracy" for major/minor mode. This number is **not valid** and is
@@ -104,9 +121,14 @@ Phase B *Enhanced* model re-injects via the music-theory branch.
   the exact motivation for re-injecting them as a hand-crafted branch in the
   Enhanced model.
 
-The tempo result is consistent with the initial single-target tempo probe
-(R² ≈ 0.12 on a separate split) — both confirm the same conclusion. The
-per-layer × per-feature heatmap in `plots/music_theory_probing_heatmap.png`
+This negative tempo R² is the **canonical** result and supersedes the early single-target
+probe (R² ≈ 0.12, §2): both agree tempo is a *gap*, but only the per-layer Ridge value is
+audit-traceable, and a negative R² is the stronger, more honest statement — the probe does
+worse than predicting the mean tempo, so tempo is not linearly recoverable anywhere in MERT
+(rather than merely "weakly encoded"). The label noise of `librosa.beat.beat_track`
+(octave/half-tempo errors) and a 1024-d probe on ~150 held-out songs both push the score
+further negative, but the directional conclusion — no generalising linear tempo signal — is
+robust. The per-layer × per-feature heatmap in `plots/music_theory_probing_heatmap.png`
 shows the full 25 × 8 grid; the summary plot
 `plots/music_theory_probing_summary.png` shows best-per-feature scores at a glance.
 

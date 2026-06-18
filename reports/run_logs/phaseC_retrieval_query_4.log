@@ -1,0 +1,94 @@
+💻  Device: cuda
+
+🔍  MODE: Query | song_id=4 | top_k=5
+  📦 Index loaded from prototypes.npy | 767 songs
+  ⚠️  FAISS not found — using sklearn cosine fallback (slower)
+
+=================================================================
+🎵  QUERY: Song ID 4
+=================================================================
+  Emotion Region  : Low Arousal / Low Valence (LVLA)
+  Arousal         : very low (0.197)
+  Valence         : very negative (0.206)
+  Physiology      : moderate electrodermal activity (3 SCR peaks, rising trend, high-activity ratio=48%)
+
+📋  RETRIEVAL EXPLANATION
+-----------------------------------------------------------------
+  Songs were retrieved based on cosine similarity in a 1024-dimensional emotion-aware latent space learned by a MERT-based Hybrid model (Weighted Layer Fusion + Supervised Contrastive Regression). The query song occupies the 'LVLA' emotional region — characterized by melancholic and subdued affective qualities. Retrieved neighbors share proximity in this space, meaning their audio representations were pulled together during contrastive training due to similar valence-arousal coordinates.
+
+🔍  TOP-5 RETRIEVED SONGS
+-----------------------------------------------------------------
+  ┌─ Rank 1 | Song ID 591 (cosine sim = 0.9929)
+  │  Emotion       : Low Arousal / Low Valence (LVLA)
+  │  Arousal       : very low (0.183)
+  │  Valence       : negative (0.286)
+  │  Physiology    : elevated electrodermal activity (2 SCR peaks, rising trend, high-activity ratio=50%)
+  │  Why retrieved : This prototype has valence higher by 0.08 than the query. Its melancholic and subdued character aligns with the query's melancholic and subdued profile. The model's contrastive loss placed both songs within a 0.993-similarity neighborhood in latent space.
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 2 | Song ID 236 (cosine sim = 0.9817)
+  │  Emotion       : Low Arousal / Low Valence (LVLA)
+  │  Arousal       : low (0.254)
+  │  Valence       : very negative (0.222)
+  │  Physiology    : moderate electrodermal activity (2 SCR peaks, rising trend, high-activity ratio=39%)
+  │  Why retrieved : This prototype has arousal higher by 0.06 than the query. Its melancholic and subdued character aligns with the query's melancholic and subdued profile. The model's contrastive loss placed both songs within a 0.982-similarity neighborhood in latent space.
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 3 | Song ID 523 (cosine sim = 0.9754)
+  │  Emotion       : Low Arousal / Low Valence (LVLA)
+  │  Arousal       : low (0.282)
+  │  Valence       : negative (0.270)
+  │  Physiology    : low electrodermal activity (5 SCR peaks, rising trend, high-activity ratio=20%)
+  │  Why retrieved : This prototype has arousal higher by 0.08, valence higher by 0.06 than the query. Its melancholic and subdued character aligns with the query's melancholic and subdued profile. The model's contrastive loss placed both songs within a 0.975-similarity neighborhood in latent space.
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 4 | Song ID 355 (cosine sim = 0.9741)
+  │  Emotion       : Low Arousal / Low Valence (LVLA)
+  │  Arousal       : low (0.408)
+  │  Valence       : negative (0.254)
+  │  Physiology    : moderate electrodermal activity (1 SCR peaks, rising trend, high-activity ratio=45%)
+  │  Why retrieved : This prototype has arousal higher by 0.21 than the query. Its melancholic and subdued character aligns with the query's melancholic and subdued profile. The model's contrastive loss placed both songs within a 0.974-similarity neighborhood in latent space.
+  └─────────────────────────────────────────────────────────
+  ┌─ Rank 5 | Song ID 267 (cosine sim = 0.9713)
+  │  Emotion       : Low Arousal / Low Valence (LVLA)
+  │  Arousal       : very low (0.211)
+  │  Valence       : negative (0.286)
+  │  Physiology    : moderate electrodermal activity (2 SCR peaks, rising trend, high-activity ratio=26%)
+  │  Why retrieved : This prototype has valence higher by 0.08 than the query. Its melancholic and subdued character aligns with the query's melancholic and subdued profile. The model's contrastive loss placed both songs within a 0.971-similarity neighborhood in latent space.
+  └─────────────────────────────────────────────────────────
+
+🧠  MUSIC-THEORETIC SUMMARY
+-----------------------------------------------------------------
+The retrieved songs show strong consistency in arousal and valence (avg neighbor arousal=0.268, valence=0.263). Mean cosine similarity=0.9791 indicates a well-structured emotion-aware latent space where the SupCR loss has successfully clustered perceptually similar tracks.
+=================================================================
+
+💾  Results saved → retrieval_query_4.txt
+
+=================================================================
+RAG PROMPT (built by retrieval.py, --llm none in-env)
+=================================================================
+[The full prompt is saved in phaseC/retrieval_query_4.txt. The Ollama/
+Anthropic backend is not reachable in this environment (no ollama daemon,
+no ANTHROPIC_API_KEY), so the generation step below was produced by an
+external Claude model answering the system's own RAG prompt verbatim. It
+is illustrative of the 'G' stage, NOT a logged pipeline output — every
+NUMBER it cites is copied from the retrieval block above; no new results.]
+
+GENERATED EXPLANATION (illustrative):
+-----------------------------------------------------------------
+These five tracks were retrieved because they sit almost on top of the
+query in the model's emotion-aware latent space (cosine 0.971–0.993), and
+that proximity reflects a shared affective character rather than mere
+acoustic coincidence. The query (A=0.20, V=0.21) and all five neighbours
+fall in the Low-Arousal/Low-Valence quadrant — the melancholic, subdued
+region of the valence–arousal plane. Arousal stays uniformly low (0.18–0.41,
+mean 0.27) and valence uniformly negative (0.22–0.29, mean 0.26), so the set
+is coherent on both axes: these are quiet, slow, emotionally downcast pieces
+with little rhythmic drive or brightness. The one mild outlier is Rank 4
+(ID 355, A=0.41) — slightly more activated than the rest, which is why it
+ranks lower despite still being clearly LVLA. Physiologically the listener
+traces agree with the audio: mostly low-to-moderate electrodermal activity
+with few SCR peaks, consistent with calm, low-engagement listening rather
+than the dense peaks of tense or energetic music. In short, the system
+grouped these songs because the contrastive objective pulled perceptually
+sad, low-energy tracks together — and the retrieval is faithful to that,
+returning an all-LVLA neighbourhood (Precision@5 = 1.0) for a query drawn
+from the dataset's hard minority quadrant.
+=================================================================

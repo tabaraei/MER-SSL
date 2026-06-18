@@ -9,7 +9,7 @@
 **Phase A — Foundation Validation**
 - Proved MERT's frozen embeddings encode music structure before any fine-tuning
 - Harmonic mode (Major/Minor): **100% linear probe accuracy** → MERT is harmonically aware `[SUPERSEDED → mode 0.673, Silhouette ≈0.19/0.26; see Step 23]`
-- Tempo (BPM): **R² = 0.12** → rhythm weakly encoded in chorus clips (expected, not a failure)
+- Tempo (BPM): **R² = 0.12** → rhythm weakly encoded in chorus clips (expected, not a failure) `[SUPERSEDED as headline → tempo R² is NEGATIVE: −0.8307 best layer / −2.1155 pooled (audited per-layer Ridge sweep, music_theory_probing_results.json). The 0.12 is a DIFFERENT probe (single pre-pooled embedding + Adam Linear) — real and reproduced (0.1191, phaseA_probe_tempo_single_embedding.log), but a narrower/more-favourable setup. See Step 28.]`
 - t-SNE visualization shows emotion quadrant separation in raw embedding space
 
 **Phase B — Hybrid Affective Model**
@@ -311,8 +311,10 @@ mode & key; same split as Phase A: test_size=0.2, random_state=42).
 
 **Gap analysis** (threshold R²<0.40, acc<0.65) → `phaseA/gap_analysis.json`.
 Result: **gap_features = ['tempo', 'key']**. Across all 25 layers, MERT does not
-linearly expose absolute tempo or key — consistent with the original Phase A
-tempo finding (R²≈0.12). Harmony/timbre features are captured well (no gap).
+linearly expose absolute tempo or key: tempo R² is **negative** (−0.8307 best layer,
+−2.1155 pooled — worse than predicting the mean), key acc 0.58 (< 0.65). This supersedes
+the early single-target tempo probe (R²≈0.12, unlogged) — same gap conclusion, but only the
+negative per-layer value is audit-traceable. Harmony/timbre features are captured well (no gap).
 
 ### Phase B — Enhanced Dual-SSL (`phaseB/train_enhanced_dual.py`)
 New: `models_enhanced.py` (`MusicTheoryBranch` = Linear(gap_dim,32)+ReLU+Dropout;
@@ -1238,3 +1240,60 @@ thesis stance: lead with Precision@k, not Silhouette.
 
 **Audit:** `verify_results.py` extended (+ Enhanced P@5/10/20) → **77 numbers, 0
 mismatches.** Log: `run_logs/eval_enhanced_retrieval.log`.
+
+---
+
+## Step 28 — Tempo R² consistency fix + Phase C retrieval example (2026-06-17)
+
+**Trigger.** Spotted an internal inconsistency: Phase A tempo was reported as
+**R² ≈ 0.12** in some places (`JOURNEY.md`, `04_results_and_sota.md §1`, this
+changelog, `01_phaseA_probing.md §2`) and as **R² = −0.8307 / −2.1155 (pooled)**
+in others (`01 §3` table, `generate_report_v3.py`, canonical per-layer JSON).
+
+**Diagnosis.** Two different probes, not a typo:
+- **0.12** — early `probe_tempo.py`: Adam-trained `Linear(1024→1)`, 200 epochs, on a
+  single pre-pooled embedding (`pmemo_mert_embeddings.pt`). **Never saved to a run log**
+  → fails the audit-traceability rule; also not parsed by `verify_results.py`.
+- **−0.8307 / −2.1155** — `run_music_theory_probing.py`: Ridge sweep over all 25 layers,
+  saved to `phaseA/music_theory_probing_results.json` (verified: `{'best_layer':0,
+  'best_r2':-0.8307,'pooled_r2':-2.1155}`).
+
+The two are **not the same conclusion**: a positive 0.12 reads "weakly encoded"; a
+negative R² reads "not linearly recoverable — worse than predicting the mean". The old
+reconciliation ("both confirm the same conclusion") was too generous.
+
+**Resolution.** Canonicalised the **negative per-layer value**; marked 0.12 **superseded**
+(kept in history with markers, never deleted). Files updated: `JOURNEY.md` (Phase A
+narrative — also removed the lingering discarded "~100% mode" claim, replaced with the
+0.673 Krumhansl value + plain-English explanation of negative R²), `04_results_and_sota.md`
+(table row + note), `01_phaseA_probing.md` (§2 superseded box, §3 reconciliation),
+`updater.md` (line 12 marker + gap-analysis paragraph). `generate_report_v3.py` already
+used −0.8307/−2.1155 → **PDF unchanged**.
+
+**Meaning of the number (for the viva).** R² = 1 − SS_res/SS_tot, baseline = predicting the
+mean. −0.83 ⇒ SS_res/SS_tot = 1.83 (errors 83% above the data variance); −2.12 ⇒ 3.1× the
+variance. Pooling all layers makes it worse, i.e. no layer carries a generalising linear
+tempo signal. Label noise (`librosa.beat_track` octave errors) + a 1024-d probe on ~150
+held-out songs push it further negative, but the directional conclusion is robust and is
+exactly what motivates the Enhanced model's `[tempo, key]` gap branch.
+
+**Phase C RAG example (logged).** Ran `retrieval.py --mode query --query_id 4` (Sad/LVLA,
+A=0.197 V=0.206, a hard minority-quadrant track). All 5 retrieved neighbours are LVLA
+(mean cosine 0.979) → **Precision@5 = 1.0** on a minority query. Output:
+`run_logs/phaseC_retrieval_query_4.log` (+ `phaseC/retrieval_query_4.txt`). The LLM "G"
+stage (Ollama/Anthropic) is unreachable in-env; an illustrative external-Claude completion
+of the system's own RAG prompt is appended to the log, clearly labelled and citing only
+numbers from the retrieval block (no new results).
+
+**Reproduction (2026-06-17).** Re-ran `probe_tempo.py` to confirm the 0.12 is real and to
+give it a log: **R² = 0.1191** (`run_logs/phaseA_probe_tempo_single_embedding.log`), matching
+the original. Root cause of the 0.12-vs-(−0.83) gap confirmed as (i) different input — single
+default-pooled embedding vs the sweep's per-layer features / layer-mean — and (ii) implicit
+shrinkage from short Adam training (final train MSE 0.62, not converged to least-squares), which
+avoids the held-out overfit that drives the closed-form Ridge probe negative. The 0.12 is a
+narrower, more-favourable special case; the systematic all-layer negative R² remains the
+canonical "is tempo linearly encoded in MERT" answer.
+
+**Audit:** tempo still not tracked by `verify_results.py` (the negative headline lives in JSON,
+not a `.log`); the 0.1191 reproduction now has a log if a parser stanza is wanted later. No
+numeric audit count change → remains **77 numbers, 0 mismatches** for the logged-result set.

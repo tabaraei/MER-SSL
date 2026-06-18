@@ -14,12 +14,20 @@ All Phase B numbers are 5-fold cross-validation on PMEmo (767 matched songs).
 | Probe | Target | Metric | Result |
 | :-- | :-- | :-- | :-: |
 | Harmonic mode | Major / Minor | accuracy | 0.673 |
-| Tempo | BPM | R² | 0.12 |
+| Tempo | BPM | R² | **−0.83** (best layer) / −2.12 (pooled) |
 | Full per-layer sweep | 8 music-theory features × 25 layers | R²/acc | gaps = **{tempo, key}** |
 
 Mode = **0.673** (Krumhansl–Schmuckler, best layer 11). The earlier "~100%" figure was a
 **discarded labelling artifact** (degenerate mean-chroma threshold, `probe_key.py:40`) and
 must not be cited as a result — see `01_phaseA_probing.md` §2.
+Tempo = **negative R²** from the audited per-layer Ridge sweep (best layer −0.8307,
+all-layers-pooled −2.1155; `music_theory_probing_results.json`): the probe does *worse than
+predicting the mean tempo*, so tempo is not linearly recoverable anywhere in MERT. The earlier
+"R² ≈ 0.12" is a **different probe** (Adam-trained `Linear(1024→1)` on the single pre-pooled
+embedding, `probe_tempo.py`; reproduced 2026-06-17 = 0.1191,
+`run_logs/phaseA_probe_tempo_single_embedding.log`) — a real but narrower, more favourable
+setup (different input + implicit shrinkage from short Adam training). It is **superseded as the
+headline** by the systematic all-layer negative value; both agree tempo is a gap.
 Gap criterion: best-layer R² < 0.40 (regression) or accuracy < 0.65 (classification).
 Key/mode via Krumhansl–Schmuckler. Details: `01_phaseA_probing.md`.
 
