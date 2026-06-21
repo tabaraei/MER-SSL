@@ -571,167 +571,62 @@ Addressing these limitations, this thesis focuses on evaluating the transferabil
 \chapter{Technologies Used}
 \label{ch3}
 
-In this chapter, we present some useful suggestions for a novice \LaTeX\ user.
+In this chapter we document the software, pre-trained models, and hardware on which the system of Chapter~\ref{ch4} is built, together with the engineering practices that keep its results reproducible. The choice of tools follows directly from one decision taken in Chapter~\ref{ch4}: the large self-supervised backbones are used \emph{frozen}, and only lightweight modules are trained on top of them (Section~\ref{sec:overview}). That decision keeps the computational footprint small enough for a single modest workstation and shifts the technical emphasis away from large-scale model training and towards feature extraction, classical machine-learning tooling, and disciplined experiment management.
 
+\section{Programming Environment and Hardware}
 
-\section{General Overview}
+The system is implemented in Python ($\geq 3.10$), with every neural component built in PyTorch~\cite{paszke_pytorch_2019} (version~$2.5.1$, CUDA~$12.1$ build) and its companion audio library torchaudio. Numerical and tabular processing rely on NumPy~\cite{harris_numpy_2020}, pandas, and SciPy.
 
-\subsection{WYSIWYG vs.\ WYSIWYM Writing}
+All experiments were run on a single workstation with two NVIDIA TITAN~V graphics cards ($12$~GB of memory each). The frozen-backbone strategy is what makes this modest hardware sufficient: because neither pre-trained encoder is fine-tuned, only forward passes are executed on the GPU, and the trainable parts of the model are small multi-layer perceptrons. The peak memory demand is therefore dominated by a single forward pass through a backbone, which fits comfortably within $12$~GB. The two cards were used not for data-parallel training but to evaluate independent encoder configurations concurrently, each pinned to one device through the \texttt{CUDA\_VISIBLE\_DEVICES} variable.
 
-The acronym WYSIWYG stands for ``What You See Is What You Get'', and refers to the concept of obtaining text and images on paper that have a layout equivalent to what is displayed on the screen by word processing software. A classic example of WYSIWYG is Microsoft Word, which shows the text paginated and formatted as one expects to see it once printed.
+\section{Self-Supervised Backbones and the Transformers Library}
 
-The acronym WYSIWYM stands for ``What You See Is What You Mean'', and it is the paradigm for creating structured texts. \LaTeX\ is an environment that supports this paradigm. In reality, Microsoft Word also has the ability to structure text, mainly through the mechanism of styles, but very few users take advantage of this functionality (obviously, if you choose to write the thesis in Word, we strongly recommend using such functions, as well as the functions for automatic management of references and bibliography).
+Two frozen self-supervised models provide the audio representations. The primary backbone is \mbox{MERT-v1-330M}~\cite{li_mert_2024}, a music-pre-trained transformer that exposes $25$ hidden layers of $1024$ dimensions and expects audio sampled at $24$~kHz. The second is \mbox{wav2vec2-base}~\cite{baevski_wav2vec2_2020}, a speech-pre-trained model with $13$ layers of $768$ dimensions operating at $16$~kHz; it is included to test whether speech-domain self-supervision carries affective cues complementary to the music-domain ones (Section~\ref{sec:multiencoder}).
 
-The main disadvantages of a WYSIWYM system are the learning curve, due to less intuitive software tools, and the need to invoke the compilation of the document to see its final appearance. For example, in \LaTeX\ the entire document is written in plain text, which contains environments and commands with layout information, and only compilation allows one to discover potential syntax errors and finally arrive at the creation of the PDF. 
+Both models are loaded through the Hugging Face Transformers library~\cite{wolf_transformers_2020} (version~$4.38.0$): MERT via its custom remote code, and each backbone paired with its matching feature extractor. Because the encoders are never updated, their per-layer hidden states are computed once for the whole corpus and cached to disk; every subsequent stage --- the per-layer probing of Section~\ref{sec:phaseA} and the weighted layer fusion of Section~\ref{sec:fusion} --- reads these precomputed features instead of re-running the encoders, which keeps each later experiment inexpensive to repeat. Audio is decoded and resampled to each backbone's native rate with librosa~\cite{mcfee_librosa_2015}.
 
-However, the initial difficulties are amply compensated by the medium- and long-term advantages. In fact, the work will be perfectly paginated and structured, and thus will have a professional appearance. This concerns not only styles, which are applied to the text consistently with the chosen template, but also typically thorny aspects of Word, such as the positioning of images and tables, the creation of a bibliography with relative citations in the text, and the creation of a table of contents. It becomes automatic and very simple, for example, to add a list of figures or tables, or to number the formulas expressed in the text. Another aspect in which \LaTeX\ is clearly superior to Word is precisely the writing of mathematical formulas, as shown in the example reported here:
-\begin{equation}
-x_i(n) = a_{i1}u_1(n) + a_{i2}u_2(n) + \cdots + a_{iJ}u_J(n) \, .
-\label{eq:multimix}
-\end{equation}
+\section{Audio Analysis and Classical Machine Learning}
 
-\subsection{Resources and Tools}
+Beyond decoding audio, librosa supplies the hand-crafted music-theory descriptors used in the probing analysis of Section~\ref{sec:phaseA} --- among them chroma, spectral contrast and centroid, zero-crossing rate, and tempo --- while musical key and mode are estimated by correlating the time-averaged chroma vector against the Krumhansl--Kessler key profiles~\cite{krumhansl_kessler_1982}.
 
-There is a vast range of online resources to get started with \LaTeX. A good starting point is the list made available on the \TeX\ Users Group (TUG) website.\footnote{\url{http://www.tug.org/interest.html}}
-Among these, the ``Not so Short Introduction to LaTeX2e'' is particularly recommended.\footnote{\url{http://mirrors.ibiblio.org/CTAN/info/lshort/}}. For those wishing to delve deeper, one of the most complete bibliographic references is the book by Mittelbach {\em et al.}~\cite{mittelbach2004latex}.
+scikit-learn~\cite{pedregosa_scikitlearn_2011} provides the classical machine-learning components that surround the deep model. The linear probes of Phase~A are its ridge-regression and logistic-regression estimators; the coefficient of determination ($R^{2}$) and the two-dimensional embedding visualisations (via $t$-SNE) are computed with it as well. Figures are produced with Matplotlib and seaborn. This division of labour is deliberate: the deep backbones supply the representations, and well-understood, transparent estimators are used to interrogate and evaluate them, which keeps the audit's measurements easy to reason about.
 
-As an alternative to a local installation on one's PC, it is possible to use an online \LaTeX\ editor, with the advantage of having the development environment and all necessary packages immediately available, as well as being able to share the project with the thesis supervisor. The most widespread online \LaTeX\ editor is Overleaf,\footnote{\url{http://www.overleaf.com}} where one can also find further documentation (in particular the guide ``Learn \LaTeX\ in 30 minutes'').\footnote{\url{https://www.overleaf.com/learn}}
+\section{The Retrieval and Explanation Stack}
 
-Whatever resource is used, here is a non-exhaustive list of basic topics one will likely encounter during the drafting of the thesis.
-\begin{itemize}
-\item Text formatting (bold, italics, font size, etc.) and document formatting (paragraphs, commands \verb|\chapter|, \verb|\section|, \verb|\tableofcontents|, etc.).
-\item Lists: {\em itemize} and {\em enumerate} environments, relevant packages ({\em paralist}).
-\item Cross-references: commands \verb|\ref|, \verb|\pageref| and \verb|\label|, labels.
-\item Mathematics: equations, {\em inline} and {\em displayed} modes, relevant packages ({\em amssymb}, {\em amsmath}).
-\item Figures: graphic formats, {\em figure} environment, relevant packages ({\em graphicx}, {\em subfloats} for multiple figures).
-\item Tables: {\em table} and {\em tabular} environments, relevant packages ({\em array}, {\em multirow}, {\em longtable}).
-\item References and bibliographies (see section~\ref{sec:bibtex} below).
-\end{itemize}
+The explanation layer of Phase~C (Section~\ref{sec:phaseC}) adds two further components. Retrieval operates on the $L_{2}$-normalised latent vectors, for which cosine similarity reduces to an inner product; nearest neighbours are found by exact brute-force search using scikit-learn's \texttt{NearestNeighbors}. A FAISS~\cite{douze_faiss_2024} inner-product index is provided as an optional backend for larger collections, but the reported experiments use the exact search, since an index of $767$ excerpts makes approximate methods unnecessary. The prototype classifier is an Audio ProtoPNet, adapting the prototypical-part network of Chen \emph{et al.}~\cite{chen_protopnet_2019} to this latent space in PyTorch.
 
-\section{Suggestions on Using \LaTeX}
-\label{sec:latex_tips}
+The natural-language explanations are produced by a retrieval-augmented generation step. The structured, evidence-grounded prompt assembled from a query and its retrieved neighbours is passed to a Llama~3.2~\cite{llama3_2024} model served locally through Ollama. Running the language model locally keeps the explanation stage self-contained and avoids transmitting any data to an external service, at the cost of the smaller capacity of a locally hosted model. The retrieval result and its grounded prompt are deterministic; the language model only rephrases that evidence in prose.
 
-Subject to the general indications provided in the previous section, some specific observations on the most typical questions and errors of students new to \LaTeX\ are reported below.
+\section{Reproducibility and Experiment Management}
 
-\subsection{Cross-references}
+Because the contribution of this thesis is framed as an audit, the experimental harness is treated as a first-class technology rather than an afterthought. Every reported figure derives from a logged experimental run: each script writes its full output to a persistent run-log, and an automated consistency check parses those logs and compares every headline number against the value quoted in the manuscript and the supporting reports, flagging any divergence. Regression and retrieval are evaluated under five-fold cross-validation with a fixed random seed (Section~\ref{sec:protocol}), so that results are reproducible across runs and every excerpt is scored by a model that never trained on it. To make the software environment itself reproducible, the exact versions of the principal libraries are pinned; they are listed in Table~\ref{tab:software}.
 
-One of the main advantages of \LaTeX\ is the possibility of setting automatic references to many elements of the document, including chapters, sections, subsections, tables, figures, equations, bibliographic references, and so on.
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Component} & \textbf{Version} \\
+\midrule
+Python & $\geq 3.10$ \\
+PyTorch (CUDA 12.1 build) & 2.5.1 \\
+torchaudio & 2.5.1 \\
+Hugging Face Transformers & 4.38.0 \\
+scikit-learn & 1.7.2 \\
+librosa & 0.11.0 \\
+NumPy & 2.2.6 \\
+pandas & 2.3.3 \\
+SciPy & 1.15.3 \\
+Matplotlib & 3.10.8 \\
+\bottomrule
+\end{tabular}
+\caption{Principal software components and the pinned versions used for all reported experiments.}
+\label{tab:software}
+\end{table}
 
-Therefore, the correct way to refer, for example, to the second chapter is not to write ``Chapter 2'' but rather ``Chapter~\ref{ch:state_of_art}''. The apparent result (in the PDF) is the same, while there are substantial differences at the code level. The advantage is that, if the second chapter were to become the third, the cross-reference would continue to point to the correct position. Think, by extension, of the numbering of images, or references to the bibliography.
+\section{Summary}
 
-Syntactically, this requires inserting \verb|\label{my_label}| commands inside the elements one wishes to refer to, and \verb|\ref{my_label}| commands where one wishes to create the reference. The bibliography is an exception (see section~\ref{sec:bibtex} below).
-
-
-\subsection{Line Breaks}
-
-Line breaks in \LaTeX\ can be effected in two ways: with the syntax \verb|\\| or with a double press of the Enter key. In general, the correct solution is the second, which is equivalent to using the Enter key in Word. The double Backslash, which corresponds to Shift+Enter in Word, creates a new line without breaking the paragraph. This should be used only in very specific cases, such as in the following sentence.
-
-The official website of the University of Milan is:\\
-\url{https://www.unimi.it}.
-
-In many \LaTeX\ styles, a new paragraph (after a double Enter) creates an indentation of the first line. There is nothing wrong with indentation, but if one really wants to avoid it, the solution is \textbf{not} to use the double Backslash! There are many more appropriate solutions (for example, setting the indentation size to zero via the command \verb|\setlength{\parindent}{0ex}|, to be inserted in the thesis preamble).
-
-\subsection{Accents}
-
-When writing in languages with accented characters (like Italian or French), their use is frequent. Accented characters entered from the keyboard may not be natively recognized depending on the encoding. In legacy LaTeX, grave and acute accents are obtained respectively with commands \verb|\`{a}| and \verb|\'{a}.| 
-
-Alternatively, it is possible to specify that UTF-8 encoding is used, using the command \verb|\usepackage[utf8]{inputenc}| in the document preamble (already included in this template). In this way, accented characters entered from the keyboard will be recognized.
-
-\subsection{Spaces Between Words}
-
-Regarding the management of spacing between words, \LaTeX\ adopts a very elegant strategy, leaving increased space after a period ending a sentence. A potential problem is that this extra space is introduced after any occurrence of a period, regardless of syntactic function, and thus also after abbreviated names, such as ``R. Schumann'', or after formulas ``e.g.'', ``Fig. n'', ``etc.'' and so on. To avoid this, these spaces that should not be increased must be replaced with alternatives, such as a Backslash followed by a space (which inserts a \textit{control space}) or a tilde \verb|~| (which introduces an \textit{unbreakable space}, useful for preventing intermediate line breaks).\footnote{For a complete treatment of the numerous variants, see \url{https://tex.stackexchange.com/questions/74353/what-commands-are-there-for-horizontal-spacing}}
-
-\subsection{Line Spacing}
-
-To increase the readability of the thesis, it may be useful to use line spacing greater than 1. One way to obtain this is to use the command \verb|\linespread{1.6}| in the document preamble (the value $1.6$ indicates double spacing, the value $1.3$ indicates 1.5 spacing. Don't ask why).
-
-
-\subsection{Double Quotes}
-
-The use of the single double-quote character found on the keyboard is absolutely discouraged, as it is not correctly interpreted by \LaTeX, especially regarding the opening of quotes.
-
-The correct combination to use is \verb|``| for opening and \verb|''| for closing. Note that in both cases these are two single backticks/apostrophes close together, not single characters. If you use TeXstudio as an editor, there is an option to automatically replace double quotes with the correct \LaTeX\ version: Options $\rightarrow$ Configure TeXstudio... $\rightarrow$ Editor $\rightarrow$ Replace Double Quotes: English.
-
-Guillemets, or French quotes, are obtained with the commands \verb|\guillemotleft| and \break\verb|\guillemotright|, the result of which is \guillemotleft this\guillemotright.
-
-
-\subsection{Environments for Writing Code}
-
-Code within the thesis should be written in a monospaced font and respecting, as much as possible, the original indentation rules (or best practices).
-
-To do this, there is first of all the verbatim environment, which must be opened and closed with the commands \verb|\begin{verbatim}| and \verb|\end{verbatim}|.
-
-Among the alternatives, the lstlisting environment is noteworthy. It requires first adding \verb|\usepackage{listings}| to the preamble, and then opening and closing the environment with the commands \verb|\begin{lstlisting}| and \verb|\end{lstlisting}|. An example, relating to the calculation of the greatest common divisor through the Euclidean algorithm in Python, is:
-
-\begin{lstlisting}
-def GCD(a,b):
-	while b != 0:
-		a, b = b, a % b
-	return a
-\end{lstlisting}
-
-If, after opening the environment, the adopted language is specified in square brackets, for example with the syntax \verb|\begin{lstlisting}[language=Python]|, code highlighting is automatically obtained:
-
-\begin{lstlisting}[language=Python]
-def GCD(a,b):
-	while b != 0:
-		a, b = b, a % b
-	return a
-\end{lstlisting}
-
-The list of supported languages and advanced options for customizing code visualization can be found at \url{https://www.overleaf.com/learn/latex/Code_listing#Reference_guide}.
-
-Consider also the possibility of importing entire code files through the syntax \verb|\lstinputlisting[language=languagename]{sourcefile}|.
-
-Finally, if lstlisting does not suit your taste, note that alternatively it is possible to use the minted package.
-
-\subsection{Figures}
-
-In all cases where possible (block diagrams, data plots, etc.), figures should be in vector format (eps, pdf) to increase their readability.
-In the case of figures produced by external software (for example, graphs exported in eps or pdf from Matlab), it is advisable to keep all source files and data used to generate them: in this way, it will be possible to recreate the figures when necessary.
-
-Figures must always have references in the text, achieved by assigning a label to the figure via the command \verb|\label{labelName}| immediately before closing the \verb|figure| environment, and using it in the text via the command \verb|\ref{labelName}|. The same applies to Tables and Equations.
-
-Avoid expressions such as ``as seen in the following figure'' in favor of exact references such as ``as seen in Fig.~\ref{fig:ideas2text}'', as \LaTeX\ positions images on the page following typographic rules, which do not necessarily correspond to the insertion position in the document source.
-
-\subsection{Comments and Review}
-
-Overleaf provides review functionalities, such as the ability to insert comments related to specific points in the source, without these affecting the source itself or the compiled file. Some professors prefer to use this tool, while others prefer to leave a trace of comments directly in the code, so that they are versioned together with the source and appear on the compiled PDF.
-
-If one prefers to comment on the code in the source rather than use Overleaf's review functions, it is necessary to increase the document margins to allow notes to stand next to the body text, and subsequently import the todonotes package. To do this, add the following commands to the preamble (on two lines and in this order): \verb|\setlength {\marginparwidth }{2cm}| and \verb|\usepackage{todonotes}|. Once the thesis is complete, comments can be hidden without having to manually delete them by modifying the package inclusion as follows: \verb|\usepackage[disable]{todonotes}|.
-
-
-\section{\hologo{BibTeX}}
-\label{sec:bibtex}
-
-\subsection{General Overview}
-
-There are multiple ways to insert a bibliography in \LaTeX. The use of the \hologo{BibTeX} system is strongly recommended. This allows adding, removing, and modifying bibliography entries efficiently, formatting them, reordering them at will, and automatically updating corresponding references in the text, etc.
-
-An introductory and complete guide is ``Tame the BeaST''.\footnote{Accessible from \url{http://www.tug.org/interest.html}} 
-In extreme synthesis, the steps to manage a bibliography via \hologo{BibTeX} are essentially three:
-\begin{enumerate}
-\item Save bibliographic references as entries in one or more files with the .bib extension (see for example the file \texttt{bibliografia.bib}, part of this template). Entries are written in a specific format; in particular, each entry has its own textual label that uniquely identifies it.
-\item Create the bibliography at the end of the document or where desired, using the command \verb|\bibliography{file1.bib,file2.bib,...}|. It is also possible to specify a bibliographic style via the command \verb|\bibliographystyle{...}|.
-\item Within the text, refer to a bibliography entry via the command \verb|\cite{entry_label}|. Note that a bibliographic entry is not included in the bibliography in the absence of a citation within the text (consistent with the discussion in section~\ref{sec:biblio}).
-\end{enumerate}
-
-It is advisable to start building one's bibliography in bib format as the state of the art is analyzed, rather than postponing it to the final drafting of the thesis.
-
-\subsection{Tools}
-
-A .bib file is a text file and can therefore be managed with any text editor. However, many more advanced tools exist to manage bibliographies in bib format. An application installable locally on one's PC is JabRef.\footnote{\url{http://www.jabref.org}}. Or there are online tools, like Zotero,\footnote{\url{http://www.zotero.org}}, which provide many functionalities including the export of bibliographies in bib format.
-
-Moreover, even Google Scholar automatically exports citations in bib format by clicking on the Cite link (icon with double quotes) and choosing the \hologo{BibTeX} option at the bottom of the window that opens. \textbf{Warning} however: often the bib files exported from Scholar are incomplete or dirty; it is always advisable to check their correctness.
-
-In fact, metadata collected from the primary source of the resource (e.g., official publication website) are generally preferred over those presented by search engines. In case official sites do not propose the \hologo{BibTeX} format, converters exist, easily found and usable via the web, to convert most formats (e.g., RIS) into \hologo{BibTeX}. In the rare cases where data are not available in any machine-readable format, you can manually compile the \hologo{BibTeX} entry yourself. For a reference on entry types and relative fields, you can consult \url{https://bibtex.eu}.
-
-The more ``tech-savvy'' can delve into advanced functionalities at will. For example, it is possible to create multiple bibliographies.\footnote{A possible way is illustrated here: \url{https://bit.ly/2wI3Y7p}}
-There is also the \texttt{biblatex} package, which provides a complete reimplementation of \LaTeX-\hologo{BibTeX} bibliographic functionalities, offering greater flexibility and maintaining backward compatibility with the bib format.
-
-
-
-
+The technology stack is intentionally lightweight. Two frozen self-supervised encoders, accessed through a standard transformer library and cached to disk, supply the representations; PyTorch implements the small trainable modules; and scikit-learn, librosa, and a locally served language model cover probing, retrieval, and explanation respectively. Nothing in the stack requires more than a single two-GPU workstation. This restraint is consistent with the aim of the thesis: the difficulty of the work lies not in the scale of the computation but in the careful measurement of what frozen self-supervised representations do and do not encode about musical emotion.
 
 % 
 %			CHAPTER 4: The Work Performed
