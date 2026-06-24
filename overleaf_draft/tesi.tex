@@ -26,13 +26,14 @@
 \usepackage{longtable}
 \usepackage{booktabs}   
 \usepackage{tabularx}   
-\usepackage[edges]{forest} 
+% \usepackage[edges]{forest}  % unused (the only forest figure is commented out) -- omitted to speed up compilation
 \usepackage{graphicx}
 \usepackage{xcolor}
 \usepackage{tikz} % TikZ must be loaded first
-\usetikzlibrary{positioning, shadows, calc, fit, backgrounds, arrows.meta, decorations.pathreplacing} % Then load the libraries
+\usetikzlibrary{positioning, calc, fit, backgrounds, arrows.meta, decorations.pathreplacing} % Then load the libraries
 % --- Where to look for figure files (upload the diagram PDFs into a "figures/" folder) ---
 \graphicspath{{figures/}{immagini/}{diagrams/}{diagrams/tikz/}{./}}
+% \setkeys{Gin}{draft=false} % force figures to render even if a global 'draft' option is set (e.g. \documentclass[draft])
 % ----------------------------
 
 % You can use the default LaTeX font with the relative package option
@@ -65,7 +66,7 @@
 
 %   AUTHOR:
 \author{Arvin Jafari Moghadam Fard}
-\matricola{123456}
+\matricola{32843A}
 
 %   TYPE OF THESIS:
 % "Bachelor's Project" (or "Elaborato Finale") for Bachelor's degrees
@@ -304,9 +305,8 @@ This thesis investigates modern SSL models—contrastive, predictive, and masked
         draw, 
         rounded corners=2pt, 
         align=center, 
-        fill=white, 
-        font=\small, 
-        drop shadow, 
+        fill=white,
+        font=\small,
         line width=0.6pt,
         minimum height=0.9cm,
         inner sep=6pt % Padding inside the boxes
