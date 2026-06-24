@@ -104,14 +104,52 @@ supervisor requested now exists in *form and substance* — it is a genuine, acc
 self-explaining classifier, not merely a readout. (The k-NN retrieval branch is separate
 and still rests on the weakly-organized latent space, §5.)
 
-### 3b. Two-Layer Explanation
-- **Layer 1 — deterministic template:** V-A coordinates, similarities, per-neighbor
-  deltas, EDA summary, the 4-centroid profile, mood trajectory. Reproducible, no
-  hallucination — citable directly in the thesis.
-- **Layer 2 — LLM-augmented (RAG):** the template feeds a structured prompt (plus a
-  static, citable emotion knowledge base) to an LLM (Ollama local / Anthropic) which
-  *translates* the deterministic facts into warm prose. The LLM synthesizes; it does
-  not decide.
+### 3b. Two-Layer Explanation (refined)
+
+**Layer 1 — deterministic template (cannot hallucinate).** A fixed, structured record of the
+query: predicted V-A coordinates + quadrant; top-k retrieved neighbours with coordinates,
+per-neighbour V-A deltas, and EDA summaries; the 4-prototype activation profile (§3a); librosa
+tempo/key; mood trajectory; and the contrastive foils. Every field is a measured number or a
+direct lookup → reproducible, citable directly in the thesis.
+
+**Foil definition (exact).** Query latent `z` and database `{x_i}` are all L2-normalized;
+retrieval ranks by cosine `s_i = zᵀx_i`. The foils are the `n_f` songs with the **lowest**
+cosine similarity, `F = argmin^(n_f)_i (zᵀx_i)` (`retriever.query_foils`, literally
+`np.argsort(sims)[:n_foils]`). Because `‖z−x_i‖² = 2(1−s_i)` on the unit hypersphere, lowest
+cosine ⇔ largest Euclidean distance, so foils are the **globally most-distant** songs (in
+practice the opposing quadrant). **NB (honesty):** these are *global "easy" negatives* — the
+selection does **not** constrain foils to share the query's tempo/key, so they are **not**
+metadata-matched "hard negatives". The thesis describes them as *most-dissimilar* contrastive
+foils, matching the code.
+
+**Layer 2 — LLM synthesis (Qwen2.5-3B-Instruct via HF `transformers`).** The template feeds a
+structured prompt to a local instruction LLM that rewrites it into 4-part prose (Recommendation
+/ Emotional Connection / Why-Not-The-Others / Listening Experience). The LLM **synthesizes; it
+does not decide.** Standardized engine = **Qwen2.5-3B-Instruct**, served in the project venv via
+the HuggingFace `transformers` backend (`--llm hf`) — no Ollama daemon, no sudo, no external API
+(Ollama is not installed on the server). `--llm ollama` (llama3.2) and `--llm anthropic` remain
+selectable but were **not** used for the reported export.
+
+**Faithfulness metric (Layer-2 grounding precision).** Layer-1 owns *correctness* (already
+measured by Precision@k, §5); Layer-2 is judged only on *faithfulness*. Define **grounding
+precision** `GP = (# Layer-2 assertions supported by Layer-1) / (# Layer-2 assertions)` over two
+assertion types: (i) **song IDs** named in the prose — supported iff `ID ∈ {retrieved ∪ foils ∪
+query}`; (ii) **directional V-A claims** (e.g. "high arousal / high valence") — supported iff
+consistent with the neighbours' mean-V-A sign. `GP < 1` ⇒ the model introduced content absent
+from the evidence. *Methodology:* `eval_rag_faithfulness.py` recomputes top-5 and foils from
+`prototypes_dual.npy`, parses `artifacts/explanations_5songs.txt`, and scores both assertion
+types per song. Log: `reports/run_logs/rag_faithfulness.log`.
+
+**Measured results (n=5, illustrative — not a headline quantitative claim):**
+- ID-grounding precision: **1.00** (song 562 names IDs 296, 91, 821, 99, 704, 457 — all
+  within {query ∪ top-5 ∪ foils}; the other 4 songs use generic references with no explicit IDs)
+- Directional faithfulness: **4/5 songs fully consistent; 9/10 individual V/A axis-claims
+  correct (0.90)**
+- Single failure: song 282 (centre/ambiguous) — prose asserts "high arousal **and** high
+  valence" while neighbours' mean valence = 0.438 (mildly negative, spanning 3 quadrants).
+  That directional valence mismatch is exactly the over-generalisation GP flags.
+
+Recomputed top-5 matches the printed export for all 5 songs (sanity check passed).
 
 ## 4. Ante-hoc vs Post-hoc (direct response to supervisor feedback)
 
@@ -225,13 +263,15 @@ metric that matters for retrieval (Precision@k) improves; the discrete-cluster m
   consistent with the fusion-collapse finding in `02_phaseB_model.md`.
 - `explanations_5songs.txt` — full Layer 1 + Layer 2 output for 5 quadrant-spanning
   songs (562, 706, 31, 894, 282), for the results chapter (`export_explanations.py`).
-  Layer 2 was generated **server-free, without sudo**, via a HuggingFace
-  `transformers` backend (default `Qwen/Qwen2.5-1.5B-Instruct`, runs in the existing
-  venv on the GPU — Ollama/sudo not required; `--llm ollama|anthropic|hf` selectable).
-  The model produces the intended 4-part structured explanation (Recommendation /
-  Emotional Connection / Why-Not-The-Others / Listening Experience). **Caveat:** a
-  1.5B local model is the quality floor; prose is coherent but model-dependent —
-  Layer 1 remains the citable, deterministic artifact.
+  Layer 2 was generated **server-free, without sudo**, via the HuggingFace
+  `transformers` backend; the exported run used **`Qwen/Qwen2.5-3B-Instruct`** (file
+  header: `LLM: hf (Qwen/Qwen2.5-3B-Instruct)`), with `Qwen2.5-1.5B-Instruct` as the
+  lighter default and `--llm ollama|anthropic` as selectable (unused) alternatives.
+  Runs in the existing venv on the GPU — Ollama/sudo not required. The model produces
+  the intended 4-part structured explanation (Recommendation / Emotional Connection /
+  Why-Not-The-Others / Listening Experience). **Caveat:** a 1.5–3B local model is the
+  quality floor; prose is coherent but model-dependent — Layer 1 remains the citable,
+  deterministic artifact (see the song-282 grounding failure in §3b).
 
 ## 6. How to Run
 

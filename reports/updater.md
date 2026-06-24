@@ -1297,3 +1297,69 @@ canonical "is tempo linearly encoded in MERT" answer.
 **Audit:** tempo still not tracked by `verify_results.py` (the negative headline lives in JSON,
 not a `.log`); the 0.1191 reproduction now has a log if a parser stanza is wanted later. No
 numeric audit count change → remains **77 numbers, 0 mismatches** for the logged-result set.
+
+---
+
+## Step 29 — Phase C RAG: LLM correction (Qwen, not Llama) + 2-layer/foil/faithfulness write-up (2026-06-17)
+
+**Trigger.** While drafting the Phase C / RAG thesis content, a check of the actual
+server + code contradicted the Chapter 3 draft, which (from an earlier answer) stated
+"Llama 3.2 via Ollama."
+
+**Findings (code/server-verified).**
+- Ollama is **not installed** on the server; no Llama cached; no Anthropic key.
+- Cached + runnable LLMs: **Qwen2.5-1.5B-Instruct and Qwen2.5-3B-Instruct** (HF `transformers`).
+- The real export `phaseC/artifacts/explanations_5songs.txt` header reads
+  `LLM: hf (Qwen/Qwen2.5-3B-Instruct)` → **Qwen2.5-3B is the engine that actually ran.**
+- A **qualitative** RAG output exists (5 quadrant-spanning songs, Layer1+Layer2); there is
+  **no quantitative** RAG evaluation yet (faithfulness metric designed this step, not yet run).
+- **Foils** in code (`retriever.query_foils`, `np.argsort(sims)[:n_foils]`) = the
+  lowest-cosine-similarity songs = *most-dissimilar / "easy" global negatives*, **not**
+  metadata-matched "hard negatives". Thesis documents the truth.
+
+**Actions.**
+- `bibliografia.bib`: removed the (now-unused) `llama3_2024`; added `qwen2_5_2024`
+  (Qwen2.5 Technical Report, arXiv:2412.15115).
+- `tesi.tex` Ch3: LLM paragraph corrected Llama/Ollama → **Qwen2.5-3B-Instruct via HF**.
+- `tesi.tex` Ch4 (new `\subsection{From Template to Prose}`, `sec:rag`): formal 2-layer
+  architecture, exact foil definition (`eq:foils`), and the **grounding-precision**
+  faithfulness metric.
+- `tesi.tex` Ch5 (`sec:results-topology`): "Qualitative retrieval analysis" — two **real**
+  case studies from the export: song 562 (clean HVHA, P@5=1.0, fully grounded) and song 282
+  (centre/ambiguous; Layer-2 over-claims "high arousal and high valence" vs mean neighbour
+  valence 0.438 across 3 quadrants — a transparency-in-failure + grounding-failure example).
+- `reports/03_phaseC_explainability.md`: §3b refined (foil def + Qwen + grounding metric);
+  §5b corrected (export used Qwen2.5-**3B**, not 1.5B).
+
+**Audit.** No numeric headline results changed (retrieval P@k, ProtoPNet acc untouched) →
+`verify_results.py` unaffected (**77 numbers, 0 mismatches**). All case-study numbers trace to
+`phaseC/artifacts/explanations_5songs.txt`.
+
+---
+
+## Step 30 — RAG faithfulness measured + PDF undefined-ref fixes (2026-06-23)
+
+**Trigger.** Two pending tasks from Step 29: (a) `eval_rag_faithfulness.py` was written but not yet run; (b) three `\ref{}` keys in `tesi.tex` were producing `??` in the PDF.
+
+**Faithfulness run (`eval_rag_faithfulness.py`).**
+- Scores both assertion types across `artifacts/explanations_5songs.txt`.
+- Recomputed top-5 matches printed export for all 5 songs (sanity check: all True).
+- **ID-grounding precision = 1.00** (song 562; other 4 songs cite no explicit IDs).
+- **Directional faithfulness = 4/5 songs, 9/10 axis-claims (0.90)**; single failure: song 282 valence claim (prose: high; neighbours mean: 0.438 = low).
+- Log saved: `reports/run_logs/rag_faithfulness.log`.
+
+**`tesi.tex` ref fixes (no content change, resolves `??` in PDF).**
+| Location | Old ref | Fix |
+|---|---|---|
+| Appendix §A.2 (L1012) | `\ref{chap:state_of_art}` | → `\ref{chap:state_of_the_art}` (typo) |
+| Ch4 §4.2 (L661) | `\ref{sec:results-phaseA}` | Added `\label{sec:results-phaseA}` to §5.4 (Cyclic Key) |
+| Ch4 §4.5 (L761) | `\ref{sec:results-protopnet}` | Added `\label{sec:results-protopnet}` before `\paragraph{The prototype classifier.}` in §5.7 |
+
+**`tesi.tex` content update (Ch5, qualitative retrieval paragraph).**
+Added one sentence with the aggregate GP numbers before the two case studies:
+"ID-grounding precision 1.00; directional faithfulness 4/5 queries, 9/10 axis-claims (0.90)."
+
+**`reports/03_phaseC_explainability.md` §3b update.**
+Replaced qualitative description of GP with the actual measured numbers from the run.
+
+**Audit.** Faithfulness numbers are illustrative (n=5); not added to `verify_results.py` headline set. All prior numbers unchanged → **77 numbers, 0 mismatches**.

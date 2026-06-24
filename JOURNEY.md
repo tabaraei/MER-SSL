@@ -420,3 +420,28 @@ The prototype rebuild was a genuine win. The new learnable ProtoPNet scored abou
 The mystery: this same run reported the "clustering score" (Silhouette) as basically zero, even though my careful audit had established it as 0.26. For a moment that looked like a contradiction. But I worked out exactly why, and it's instructive: the retrieval index is assembled by pooling song-fingerprints from *five different models* (one per cross-validation fold). Each of those five models lands its fingerprints in a slightly different orientation, so when you pool them and ask "are the four emotion regions tightly separated *across the whole pool*?", the answer collapses to zero — not because any single model is disorganised, but because you've mixed five differently-oriented maps together. The retrieval score survives this mixing (it only cares about *local* neighbours), but the clustering score doesn't (it's a *global* measure). 
 
 **What I learned.** This finally and precisely explains the "is it zero or is it 0.26?" question that has haunted this project: **zero** is what you get when you pool five models' maps for the retrieval index; **0.26** is the honest within-one-model number. They're both correct, for different measurements — and the difference is a property of *pooling*, not of the model. It also re-confirms the methodological line I've held all along: trust Precision@k (robust, local) over Silhouette (fragile, global) for judging whether the space is emotionally organised. Pleasingly, the experiment I ran to give my benchmark model a fair retrieval score also handed me the cleanest possible explanation of a months-old puzzle.
+
+## Getting the RAG explainer's story straight (Phase C write-up)
+
+When I started writing up the explainable-retrieval part of the thesis, I almost wrote down the wrong tool. An earlier note said the natural-language step used Llama 3.2 through Ollama — but when I actually checked the server, Ollama isn't even installed, and the real exported explanations were produced by **Qwen2.5-3B-Instruct** run straight through HuggingFace `transformers` (no daemon, no admin rights, which is exactly why it works on the university machine). I corrected Chapter 3 and the report to say Qwen, and removed the Llama reference. The lesson, again: check what actually ran, not what I remembered.
+
+Two more things became clear while documenting it. First, the "foils" (the *why-not-these* songs) are, in the code, simply the most dissimilar songs by cosine similarity — not the cleverer "same tempo but opposite mood" hard negatives I might have liked to claim, so I wrote the honest definition. Second, the system splits cleanly into a deterministic Layer 1 (the numbers) and an LLM Layer 2 (the prose), which lets me judge the prose on *faithfulness* alone — does it ever say something the numbers don't support? I found a real failure case (song 282, a track sitting dead-centre on the emotion plane) where the model wrote "high arousal and high valence" even though the retrieved neighbours were mixed and slightly negative. Rather than hide it, I used it as a case study: it shows exactly why keeping the numbers separate and inspectable matters.
+
+**What I learned.** The explanation system's honesty comes from its structure: because Layer 1 can't hallucinate and Layer 2 may only rephrase it, any mistake is visible by reading the prose against the template — and the borderline song made that concrete.
+
+## Running the faithfulness check and fixing the PDF undefined references
+
+**What I did.** Two cleanup tasks: (1) ran `eval_rag_faithfulness.py` — the script that scores how faithfully the Qwen LLM prose stays to the deterministic Layer-1 template, across the 5-song export. (2) Fixed three `\ref{}` labels in the thesis that were producing `??` in the compiled PDF.
+
+**Faithfulness results (n=5, illustrative).** The script recomputed top-5 and foils from `prototypes_dual.npy` and confirmed the recomputed sets exactly match the printed export (sanity check passed for all 5 songs). Scores:
+- **ID-grounding precision = 1.00** — song 562 named 6 song IDs in its prose (296, 91, 821, 99, 704, 457) and all 6 are within {query ∪ top-5 ∪ foils}. The other 4 songs used only generic language with no explicit IDs.
+- **Directional faithfulness = 4/5 songs, 9/10 axis-claims (0.90)** — the single failure is song 282, which claimed "high valence" while its neighbours' mean valence was 0.438 (mildly negative, spanning 3 quadrants). This is exactly the over-generalisation case study already in the thesis.
+
+The numbers confirm the two case studies written in Chapter 5 are representative, not cherry-picked. Song 562 (clean case) is fully grounded; song 282 (borderline) is the only failure.
+
+**PDF `??` fixes.** Three cross-references in the thesis were pointing to labels that didn't exist yet:
+1. `\ref{chap:state_of_art}` in the appendix — simple typo; the real label is `chap:state_of_the_art`. Fixed.
+2. `\ref{sec:results-phaseA}` in Chapter 4 — no dedicated Phase A results section existed in Ch5. Added `\label{sec:results-phaseA}` as a secondary label on §5.4 (Cyclic Key Encoding), which is where the Phase A probing null result is reported. Fixed.
+3. `\ref{sec:results-protopnet}` in Chapter 4 — pointed to the prototype results discussion; added `\label{sec:results-protopnet}` right before the `\paragraph{The prototype classifier.}` in §5.7. Fixed.
+
+**What I learned.** The faithfulness check produced a clean quantitative summary that now appears in the thesis (4/5, 0.90) as a measured example rather than only the qualitative description of the two songs. The number is honest about its scope: it's illustrative over n=5, not a claim about general LLM reliability.

@@ -32,7 +32,7 @@
 \usepackage{tikz} % TikZ must be loaded first
 \usetikzlibrary{positioning, shadows, calc, fit, backgrounds, arrows.meta, decorations.pathreplacing} % Then load the libraries
 % --- Where to look for figure files (upload the diagram PDFs into a "figures/" folder) ---
-\graphicspath{{figures/}{immagini/}{./}}
+\graphicspath{{figures/}{immagini/}{diagrams/}{diagrams/tikz/}{./}}
 % ----------------------------
 
 % You can use the default LaTeX font with the relative package option
@@ -58,13 +58,13 @@
 \cdl{Master's Degree in\\Computer Science}
 
 %   THESIS TITLE:
-\title{Self-Supervised Learning for Music Information Retrieval: State of the Art and Applications}
+\title{An Empirical Audit of Self-Supervised Learning for Explainable Music Emotion Recognition}
 % This command (optional) overwrites \title for the cover page
 % Can be used to print special characters while keeping metadata clean
-\printedtitle{Self-Supervised Learning for Music Information Retrieval:\\State of the Art and Applications}
+\printedtitle{An Empirical Audit of Self-Supervised Learning for\\Explainable Music Emotion Recognition}
 
 %   AUTHOR:
-\author{Arvin [Your Surname]}
+\author{Arvin Jafari Moghadam Fard}
 \matricola{123456}
 
 %   TYPE OF THESIS:
@@ -74,8 +74,8 @@
 
 %   SUPERVISOR AND CO-SUPERVISOR:
 % Note: 'Relatore' = Supervisor, 'Correlatore' = Co-supervisor
-\relatore{Prof. Giovanni Degli Antoni}
-\correlatore{Prof. Brian W. Kernighan}
+\relatore{Prof. Stavros Ntalampiras}
+\correlatore{Ali Tabraei}
 % \correlatore{Prof. Dennis M. Ritchie} % Uncomment if you have a second co-supervisor
 
 %   LABORATORY:
@@ -229,12 +229,12 @@ Taken together, these three components must make the {\em relevance} of the work
 
 The choice of how to structure an extended work, such as a final project or a thesis, is neither simple nor unique; therefore, the points listed below should be taken as generic suggestions and adapted to one's personal situation.
 
-\begin{figure}[t]
-	\centering
-	\includegraphics[width = \textwidth, trim={0 25mm 0 0}, clip]{immagini/ideas2text.png}
-	\caption{The process of transforming ideas into text~\cite{hamalainen2019web}.}
-	\label{fig:ideas2text}
-\end{figure}
+% \begin{figure}[t]
+% 	\centering
+% 	\includegraphics[width = \textwidth, trim={0 25mm 0 0}, clip]{immagini/ideas2text.png}
+% 	\caption{The process of transforming ideas into text~\cite{hamalainen2019web}.}
+% 	\label{fig:ideas2text}
+% \end{figure}
 Before starting to write text, it is fundamental to create a hierarchically organized table of contents (thesis, chapters, sections, subsections, etc.). Once a satisfactory index is obtained, it can be filled with the text of the thesis. 
 A computer science approach to the issue is the following: writing a thesis means starting from a graph of ideas~\cite{hamalainen2019web} and arriving at creating a tree of textual content (a \textit{minimum spanning tree} of the idea graph!). The tree represents the text structure, where the root node is the thesis itself, its children are the chapters, etc. The leaves of the tree represent the finest-level subsections.  
 %
@@ -595,7 +595,7 @@ scikit-learn~\cite{pedregosa_scikitlearn_2011} provides the classical machine-le
 
 The explanation layer of Phase~C (Section~\ref{sec:phaseC}) adds two further components. Retrieval operates on the $L_{2}$-normalised latent vectors, for which cosine similarity reduces to an inner product; nearest neighbours are found by exact brute-force search using scikit-learn's \texttt{NearestNeighbors}. A FAISS~\cite{douze_faiss_2024} inner-product index is provided as an optional backend for larger collections, but the reported experiments use the exact search, since an index of $767$ excerpts makes approximate methods unnecessary. The prototype classifier is an Audio ProtoPNet, adapting the prototypical-part network of Chen \emph{et al.}~\cite{chen_protopnet_2019} to this latent space in PyTorch.
 
-The natural-language explanations are produced by a retrieval-augmented generation step. The structured, evidence-grounded prompt assembled from a query and its retrieved neighbours is passed to a Llama~3.2~\cite{llama3_2024} model served locally through Ollama. Running the language model locally keeps the explanation stage self-contained and avoids transmitting any data to an external service, at the cost of the smaller capacity of a locally hosted model. The retrieval result and its grounded prompt are deterministic; the language model only rephrases that evidence in prose.
+The natural-language explanations are produced by a retrieval-augmented generation step. The structured, evidence-grounded prompt assembled from a query and its retrieved neighbours is passed to a small instruction-tuned language model --- Qwen2.5-3B-Instruct~\cite{qwen2_5_2024} --- run locally through the same Hugging Face Transformers library used for the audio backbones. Serving the model locally keeps the explanation stage self-contained, requires no external API or separate inference server, and fits within the workstation's GPU memory; the trade-off is the smaller capacity of a $3$-billion-parameter model. The separation of roles is deliberate and is formalised in Section~\ref{sec:rag}: the retrieval result and its grounded prompt are fully deterministic, and the language model only rephrases that fixed evidence into prose, so the factual content of an explanation is settled before the model is ever called.
 
 \section{Reproducibility and Experiment Management}
 
@@ -772,6 +772,24 @@ This limitation motivates the principal architectural contribution of the explan
 
 where $c(j)$ is the quadrant of prototype $j$ and $y_{i}$ the label of excerpt $i$. The cluster cost pulls each excerpt towards a prototype of its own quadrant; the separation cost pushes it away from prototypes of other quadrants. Learning the prototypes jointly with the representation places them where the classes are genuinely separable, while the identity-prior head preserves the ante-hoc interpretability that motivated the prototype design in the first place. The resulting classifier is shown in Chapter~\ref{chap:test} to surpass both the static centroid readout and the majority-class baseline.
 
+\subsection{From Template to Prose: A Two-Layer Pipeline}
+\label{sec:rag}
+
+The retrieval channel and the prototype profile are both \emph{numeric}. To turn them into an explanation a listener can read, the system adds a final, deliberately thin generation step and keeps it strictly separated from everything that precedes it. The explanation pipeline therefore has two layers with very different responsibilities.
+
+\paragraph{Layer 1 --- the deterministic template.} The first layer assembles a fixed, structured record of the query: its predicted valence--arousal coordinates and quadrant; the top-$k$ retrieved neighbours with their own coordinates and electrodermal-activity summaries; the prototype-activation profile of Section~\ref{sec:protopnet}; the librosa-derived tempo and key; and a set of contrastive foils. Every field is either a measured number or a direct lookup, so this layer has nothing to invent.
+
+The foils carry the ``why not the others'' part of the explanation and deserve a precise definition. Let $\mathbf{z}$ be the $L_{2}$-normalised latent of the query and $\{\mathbf{x}_{i}\}_{i=1}^{N}$ the indexed database, also unit-norm; retrieval ranks candidates by cosine similarity $s_{i}=\mathbf{z}^{\top}\mathbf{x}_{i}$, and the top-$k$ neighbours are the $k$ largest $s_{i}$. The foils are defined symmetrically as the $n_{f}$ excerpts with the \emph{smallest} cosine similarity,
+\begin{equation}
+\label{eq:foils}
+\mathcal{F} \;=\; \operatorname*{arg\,min}_{i}{}^{(n_{f})}\; \mathbf{z}^{\top}\mathbf{x}_{i},
+\end{equation}
+that is, the items at the very bottom of the same ranking. Because the vectors are unit-norm, $\lVert \mathbf{z}-\mathbf{x}_{i}\rVert_{2}^{2}=2\,(1-s_{i})$, so minimal cosine similarity is exactly maximal Euclidean distance: the foils are the excerpts lying farthest from the query on the emotion hypersphere, which in practice occupy the opposing affective quadrant. This is a deliberately simple criterion --- the foils are the globally most dissimilar excerpts, not negatives constrained to share the query's tempo or key --- but it is sufficient to ground a contrast (``recommended because energetic and positive, unlike these calm, subdued alternatives'').
+
+\paragraph{Layer 2 --- the synthesis step.} The second layer is the small language model of Chapter~\ref{ch3} (Qwen2.5-3B-Instruct, served locally). It receives the Layer~1 template as a prompt and is instructed to rewrite it, using only the supplied evidence, into a fixed four-part answer: a \emph{recommendation}, an \emph{emotional connection} that names the shared region of the valence--arousal plane, a \emph{why-not-the-others} contrast built from the foils, and a \emph{listening experience} grounded in the physiological summary. The model contributes fluency, not facts.
+
+\paragraph{Faithfulness rather than correctness.} This separation has a useful consequence for evaluation. The \emph{correctness} of an explanation --- whether the retrieved songs really are emotionally close --- is a property of Layer~1, and is already measured by the retrieval Precision@$k$ of Section~\ref{sec:protocol}. Layer~2 is therefore held to a narrower standard: does its prose stay faithful to the template, or does it assert claims the numbers do not support? This is assessed with a lightweight grounding check. From each generated explanation, two kinds of assertion are extracted --- the song identifiers it names and the direction of its valence--arousal claims --- and the fraction that are present in, or consistent with, the Layer~1 template is computed; a value below one flags content the model introduced on its own. Applied across a sample of queries, this \emph{grounding precision} is a cheap, reproducible measure of how far the synthesis step strays from its evidence, and Section~\ref{sec:results-topology} reports what it shows on two concrete cases.
+
 \section{Evaluation Protocol}
 \label{sec:protocol}
 
@@ -860,6 +878,7 @@ A direct ablation confirms the cause and its consequence. Replacing the full fus
 
 \section{The Cyclic Key Encoding: A Null Result as Evidence}
 \label{sec:results-cyclic}
+\label{sec:results-phaseA}
 
 Section~\ref{sec:cyclickey} corrected the encoding of musical key from a raw integer to the cyclic form of Equation~\ref{eq:cyclic}. The natural expectation was that a correct encoding would let the key feature finally improve valence. A controlled A/B experiment --- identical model, identical folds, only the key encoding changed --- shows that it does not. Valence moves by $-0.008$ $R^{2}$, comfortably inside the per-fold standard deviation. The result is null.
 
@@ -906,6 +925,7 @@ Dual-SSL                         & 0.585 \\
 \label{tab:retrieval}
 \end{table}
 
+\label{sec:results-protopnet}
 \paragraph{The prototype classifier.} The static four-centroid readout was replaced by the learnable Audio ProtoPNet of Section~\ref{sec:protopnet}. The improvement is decisive (Table~\ref{tab:protopnet}). The static readout scored $0.462$ to $0.506$, below the naive majority-class baseline of $0.611$. The learnable network reaches $0.728$ raw accuracy and $0.545$ balanced accuracy, clearing both the static readout and the majority baseline. The gain is sharpest where it matters most: recall on the sad quadrant rises from $0.17$ to $0.69$. Learning the prototypes during training, rather than fixing them afterwards, places them where the classes are genuinely separable.
 
 \begin{table}[t]
@@ -931,20 +951,82 @@ The ProtoPNet supplies the decisive test. It is trained \emph{explicitly} to sep
 
 This decoupling of classifiability from clustering is the topological proof. It demonstrates that the low Silhouette is not a deficiency of the architecture, since even a model optimised to cluster does not raise it. The low value is intrinsic to the data. Emotion in this space is a continuous gradient, not a set of discrete islands. This is precisely the geometry that Russell's circumplex model predicts~\cite{russell_circumplex_1980}: valence and arousal are continuous dimensions, and the four quadrants are analytical bins drawn over a smooth manifold, not natural categories. The system's latent space is therefore not a failed clustering. It is a faithful, measurable instantiation of the dimensional model of affect, and the retrieval quality of Table~\ref{tab:retrieval} is the correct way to evaluate it.
 
-% 
+\paragraph{Qualitative retrieval analysis.} The metrics above describe the latent space in aggregate; it is worth seeing the two-layer explanation pipeline of Section~\ref{sec:rag} act on individual queries, including one where it struggles. The two cases below are taken from the five-query export produced by the pipeline (one prototypical query per quadrant plus the single most ambiguous query); each pairs the deterministic Layer~1 template with the Qwen2.5-3B prose of Layer~2. A lightweight grounding check (\texttt{eval\_rag\_faithfulness.py}) scores both assertion types across the full five-query set: ID-grounding precision is $1.00$ (all six song IDs named in the one prose that cites them fall within the reference set), and directional faithfulness holds for $4$ of $5$ queries ($9$ of $10$ individual valence/arousal axis-claims correct, $0.90$). The single failure is the borderline query examined below.
+
+\emph{A clean case (song~562, high arousal / high valence).} The query sits firmly in the energetic--positive quadrant (arousal $0.732$, valence $0.714$). All five retrieved neighbours lie in the same quadrant at near-maximal similarity (cosine $\approx 0.999$; mean neighbour arousal $0.797$, valence $0.768$), so Precision@$5$ is $1.0$, and the prototype profile ranks HVHA highest. The generated prose names songs $296$, $91$ and $821$ --- all genuinely among the retrieved five --- and describes them as sharing ``high arousal and positivity'': every claim it makes is present in the template, so its grounding precision is one. Retrieval, prototype, and prose all agree. One detail is worth noting even here: the top two prototype activations are almost tied ($0.6704$ for HVHA against $0.6695$ for HVLA), a small but honest reminder of the continuous, weakly-clustered geometry established above --- the query is positive and energetic by its coordinates, not because it falls into a cleanly separated island.
+
+\emph{A borderline case (song~282, the affective origin).} The second query is deliberately the hardest in the set: its coordinates ($0.507$, $0.508$) place it almost exactly at the centre of the valence--arousal plane, where the quadrant label is decided by a hair. Layer~1 exposes this ambiguity rather than hiding it. The four prototype activations span only $0.643$ to $0.687$ --- the model is genuinely undecided, and its strongest match (HVLA) does not even agree with the threshold-assigned region (HVHA). The retrieved neighbours scatter across three different quadrants, with a mean neighbour valence of $0.438$ that is, if anything, mildly \emph{negative}. The deterministic record therefore tells the truth: this is an emotionally neutral excerpt with no well-defined affective neighbourhood. Layer~2, however, smooths over the difficulty: the prose asserts that ``all the retrieved songs share a high arousal and high valence,'' a statement the neighbour coordinates contradict. This is exactly the failure mode the grounding check of Section~\ref{sec:rag} is designed to catch --- a directional claim unsupported by the template drives the explanation's grounding precision below one. The case is instructive twice over. It shows the value of keeping Layer~1 separate and inspectable, since a reader can detect the over-generalisation simply by reading the prose against the numbers; and it locates the limitation precisely --- not in the retrieval or the prototype, which honestly report the ambiguity, but in the synthesis step's tendency to round a borderline query towards a tidy story. It is also consistent with the data floor of Section~\ref{sec:results-floor}: queries at the centre of the plane are exactly those the corpus represents least densely.
+
+%
 %			CHAPTER 6: Conclusions and Future Developments
 % 
 
 \chapter{Conclusions}
 \label{ch6}
 
-\section{Conclusions}
+\section{Summary of the Work}
+\label{sec:conclusions-summary}
 
-In the conclusions, one sums up what has been achieved, making a concise summary of the work performed. In particular, the strengths and criticalities of the research carried out must be declared, as well as which aspects of the state of the art have been surpassed by the work in question.
+This thesis set out to test a single proposition: that a frozen, self-supervised music model can be turned into an emotion recogniser that is both accurate and able to explain itself, and to report plainly wherever that proposition broke down. The work was deliberately framed as an \emph{empirical audit} rather than a system-building exercise. Every component was kept, altered, or discarded on measured evidence, and the experiments that refuted the system's own assumptions were treated as results in their own right.
+
+The investigation followed the three phases of Chapter~\ref{ch4}. Phase~A probed the frozen MERT representation, layer by layer, to establish which musical attributes it linearly exposes before any task-specific training. Phase~B fused the frozen backbones into a lightweight regressor that maps audio onto Russell's valence--arousal plane, and subjected each architectural choice to ablation. Phase~C reused the learned latent space, unchanged, as the index of a self-explaining retrieval engine, and added a learnable prototype classifier and a two-layer explanation pipeline. Throughout, the large backbones were never fine-tuned: with only $767$ annotated excerpts, treating the pre-trained model as a fixed feature extractor was the only defensible choice, and it kept the whole system trainable on a single two-GPU workstation.
+
+What emerged is a working pipeline whose honest value lies as much in its negative findings as in its predictive scores. The system predicts arousal well, predicts valence up to the audio-only ceiling, and retrieves emotionally similar songs at roughly twice the random rate. At the same time, several of the system's more ambitious parts --- the learnable layer weighting, the second speech-based encoder, and the attempt to borrow training data from another domain --- were measured and found not to deliver the gains they were built to provide. The thesis reports these plainly rather than hiding them.
+
+\section{Answering the Research Questions}
+\label{sec:conclusions-rqs}
+
+\paragraph{Does the frozen backbone encode musically meaningful structure (Phase~A)?}
+Partly, and in a way that proved directly useful for the design. The short-time spectral and chroma-related descriptors are strongly and recoverably encoded, and they are easiest to read off the network's \emph{early} layers: the best single layer is between $0$ and $3$ for all five such features --- spectral centroid, zero-crossing rate, spectral contrast, chroma, and rhythmic stability. This confirms that MERT is a sound foundation. Two attributes, tempo and musical key, fell below the probing threshold everywhere in the network and were diagnosed as representational gaps. The diagnosis was not left as an observation: it motivated the music-theory branch of Phase~B, which re-injects exactly those two descriptors rather than guessing what auxiliary information might help.
+
+\paragraph{Can SSL embeddings be mapped accurately onto the valence--arousal plane (Phase~B)?}
+For arousal, yes: the Enhanced configuration reaches $R^{2}=0.7182$, and music-specific pre-training measurably helps, with MERT alone ($0.5055$ valence) ahead of the speech-pre-trained wav2vec2 ($0.4825$) and a non-pre-trained mel-spectrogram CNN ($0.4452$). For valence, the answer is bounded: the best configuration reaches only $R^{2}\approx0.576$, and three different top configurations sit within a fold's standard deviation of one another. That valence figure still leads the published audio-only PMEmo comparison of Table~\ref{tab:sota}, while the explanation layer is something none of those competing systems offer. The valence ceiling is not a tuning failure but a limit of the audio signal itself, a reading that two separate later experiments independently support: correcting the key encoding changed nothing, and the minority quadrants stay unpredictable however the data is reweighted.
+
+\paragraph{Can the latent space support self-explaining retrieval (Phase~C)?}
+Yes, with an honest qualification about its geometry. Case-based retrieval reaches Precision@$5 = 0.594$ on held-out data, roughly $2.15$ times the random baseline of $0.276$, and the configuration deployed for retrieval is also the best retriever. The learnable Audio ProtoPNet reaches $0.728$ raw and $0.545$ balanced accuracy, clearing both the post-hoc centroid readout ($0.462$--$0.506$) and the majority-class baseline ($0.611$), and lifting recall on the sad quadrant from $0.17$ to $0.69$. The qualification is that the space is not organised into four discrete emotional clusters: the quadrant Silhouette stays between $0.18$ and $0.29$ across every training objective tried, far below the $\approx0.5$ of clean clusters. As Section~\ref{sec:results-topology} argues, this is not a defect --- it is the continuous valence--arousal gradient that Russell's circumplex predicts, and Precision@$k$, not Silhouette, is the faithful way to measure it.
+
+\section{Principal Contributions}
+\label{sec:conclusions-contributions}
+
+The contribution of this work is the audit itself: a set of measured, reproducible statements about what frozen self-supervised representations do and do not encode about musical emotion. The most significant are the following.
+
+\begin{itemize}
+    \item A full per-layer probing of MERT that locates where musical structure lives in the network, and closes the loop by re-injecting the two diagnosed gap features into the predictor.
+    \item A multi-encoder affective regressor with a four-term hybrid objective (MSE, CCC, ranking, and supervised contrastive regression), each term justified by ablation against a pre-registered pass mark rather than by assumption.
+    \item A learnable, ante-hoc Audio ProtoPNet that replaces a weak post-hoc centroid readout and is the only prototype method in the comparison to beat the majority-class baseline, while remaining interpretable by construction.
+    \item A set of clean, citable negative findings that temper the field's expectations of self-supervised features for affect: \emph{fusion collapse} (the learned layer weights stay near-uniform, entropy $3.218$ against a maximum of $3.219$); the \emph{redundancy} of a second, speech-pre-trained encoder; the \emph{failure} of borrowing affect-labelled environmental sounds (IADS-E), because the self-supervised features are too specialised in music and speech to use the low-level acoustic overlap that such transfer depends on; and the \emph{null result} of fixing the musical-key encoding, where valence barely moved ($\Delta R^{2}_{V}=-0.008$), showing the valence limit comes from the data and not from how the feature was written down.
+    \item A two-layer explanation pipeline that keeps a fixed, inspectable evidence table (Layer~1) apart from a small language model that only puts it into words (Layer~2), together with a grounding check that measures --- rather than assumes --- how faithfully the words match the table.
+\end{itemize}
+
+Taken together, these results support a narrow but well-evidenced claim: a frozen SSL backbone can anchor an emotion recogniser that is competitive on the harder valence axis among comparable audio-only methods \emph{while} carrying an explanation layer that none of those methods provide. The larger architectural bets --- that adding more encoders, or letting the model learn which layers matter, would bring large gains --- did not pay off, and the thesis says so plainly rather than glossing over it.
+
+\section{Limitations}
+\label{sec:conclusions-limitations}
+
+The single dominant limitation is class imbalance. PMEmo is roughly $61\%$ high-valence/high-arousal, leaving as few as $64$ excerpts in a minority quadrant, and the per-quadrant $R^{2}$ is negative for all three minority quadrants in every configuration. Three independent interventions --- a balanced sampler, feature-space mixup, and an auxiliary classification head --- each failed to lift a minority quadrant above zero, which identifies the limit as the sampling density of the data, not the architecture. Because a transparent emotion recogniser is only as trustworthy as its weakest emotion, this floor is the most consequential caveat in the work: the system is reliable on the majority region and unreliable precisely where data is scarce.
+
+Three further limitations qualify the scope of the claims. First, the valence ceiling near $R^{2}\approx0.58$ is consistent across every audio-only configuration and matches the field-wide ceiling; valence appears to depend on lyrical and cultural information absent from the audio signal. Second, the real arousal gains came from the lightweight add-ons --- the trainable spectrogram branch and the explicit tempo feature --- rather than from the self-supervised fusion that frames the architecture, and the layer-fusion mechanism collapses to uniform weights whenever the training data is too small to support layer selection. Third, the explanation layer is faithful but only within limits. The fixed Layer~1 template cannot invent anything, but the language model that turns it into prose can over-generalise on hard, borderline songs: in the five-query grounding check it stayed faithful on $4$ of $5$ queries ($9$ of $10$ valence/arousal claims), failing only on the single song sitting at the dead centre of the emotion plane. And the retrieval score, Precision@$k$, only measures whether neighbours share the same valence--arousal label, which is a proxy for true perceptual similarity; no user study has yet tested whether real listeners find the explanations trustworthy.
 
 \section{Future Developments}
+\label{sec:conclusions-future}
 
-Future developments generally include those improvements not realized due to lack of time, whose necessity emerged only after testing, and which concern the project at a higher level of abstraction (in the case of theses fitting into a line of research).
+\paragraph{Closing the valence gap with other modalities.}
+The most principled path past the valence ceiling is to add the information the audio signal does not carry. Lyrics, and other textual or symbolic modalities, hold much of the cultural and semantic context that valence depends on, and a dedicated text branch is the natural next step for moving valence beyond its audio-only limit. This is a larger undertaking than any single-encoder change, but the audit identifies it as the one direction with genuine headroom rather than diminishing returns.
+
+\paragraph{Confronting the data floor with larger and balanced corpora.}
+Because the minority-quadrant failure is a property of the corpus and not of the model, the clearest single improvement would come from training on a larger and better-balanced affective dataset, in which the calm, tense, and sad regions are represented densely enough to estimate. A complementary route is principled cross-corpus pooling --- combining PMEmo with other valence--arousal datasets --- provided it preserves the low-level acoustic detail that the IADS-E experiment showed self-supervised features discard. Until the minority emotions carry enough samples to fit, no reweighting can manufacture a signal the data does not contain.
+
+\paragraph{Pairing self-supervision with what it discards.}
+One of the clearest lessons of this audit is that frozen self-supervised features are powerful but selective: they abstract music and speech into high-level structure and throw away the low-level acoustic detail that does not serve their pre-training objective. The real arousal gains here came not from stacking self-supervised encoders but from a hand-crafted tempo feature and a small trainable spectrogram branch, and the cross-domain transfer failed for exactly the same reason. This points to a hybrid design as a productive future direction, in which self-supervision is treated as one component among several rather than the whole system: the SSL backbone supplies semantic abstraction, while classical descriptors, symbolic or score-based models, and task-specific networks supply the rhythmic, harmonic, and low-level acoustic invariants the backbone has abstracted away. Used this way, self-supervised representations can compensate for the weaknesses of simpler models and, in turn, be compensated by them --- a more realistic role than the standalone foundation the architecture originally assumed.
+
+\paragraph{Validating and deepening the explanation.}
+The explanation layer is presently evaluated by proxy. A user study would replace the Precision@$k$ proxy with perceptual ground truth and test whether the template-and-prose explanations actually earn a listener's trust, and whether the synthesis step's occasional over-generalisation on borderline songs harms that trust in practice. Per-query layer attribution, in place of the present global attribution, would make the interpretability claim model-faithful at the level of an individual song. On the feature side, the from-scratch spectrogram branch could be replaced by a compact, music-pretrained convolutional model (such as MusiCNN or PANNs), supplying the same complementary information at lower computational cost and with less risk of overfitting on a few hundred songs.
+
+\paragraph{Towards a recommender that understands and explains feeling.}
+Read together, the three phases of this thesis are the two halves of a single longer-term goal: a music recommender that not only places a song on the valence--arousal plane but can also say, in grounded terms, \emph{why} it feels the way it does. The architecture for such a system exists here in prototype --- prediction in Phase~B, retrieval and explanation in Phase~C, sharing one latent space. What separates this prototype from a deployable affective recommender is concrete and already named by the audit: the valence ceiling, the unreliable minority emotions, the lack of song metadata in PMEmo (which currently prevents artist- or title-aware recommendation), and explanations that are validated only by proxy. Closing those gaps, rather than any new architectural idea, is what would turn the prototype into a system that genuinely understands and explains musical emotion.
+
+\paragraph{A downstream application: music for well-being.}
+Finally, the same machinery suggests an application this thesis does not itself deliver but can scope precisely: assistive, well-being-oriented playlisting, where the value of an \emph{explained} emotional recommendation is highest. Reaching it would require specific modifications, each one a direct response to a limitation reported above. It would demand reliability on the minority emotions --- calm and sadness especially --- which is exactly where the present model is weakest and where the data floor must first be lifted. It would require moving from the population-normalised electrodermal signal used here to a per-listener physiological baseline, so that the response modelled is the individual's rather than the dataset's average. It would need temporal modelling of a listening trajectory rather than a single short excerpt, since mood regulation unfolds over a session. And it would depend on the validated, trustworthy explanations of the user study above. Stated this way, well-being support is not a motivating promise but a measurable target: the audit has already enumerated the conditions under which it would become feasible.
 
 
 % 
@@ -953,109 +1035,107 @@ Future developments generally include those improvements not realized due to lac
 
 \appendix
 
-\chapter{General Information on Internship Activity}
-The student preparing to carry out thesis work generally meets the supervisor and co-supervisor at the beginning of the project to define a roadmap, then upon completion of each set objective, presents themselves again for an update and a check. This is very important to approach the problem organically and to avoid the illusion of having reached a sufficient result while considering the work concluded.
+\chapter{Full Per-Layer Probing Results}
+\label{app:probing}
 
-During the work, it is recommended to take notes on what is being done, so as to have a basis for drafting the manuscript.
+This appendix reports the complete Phase~A probing analysis summarised in Section~\ref{sec:phaseA}. Each of MERT's $25$ hidden layers was probed independently against eight librosa-derived music-theory descriptors. Regression targets were fitted with ridge regression and scored by the coefficient of determination $R^{2}$; the two classification targets (harmonic mode and musical key) were fitted with logistic regression and scored by accuracy. For every descriptor, Table~\ref{tab:probing-full} lists the single best-performing layer, its score, and the score of a \emph{pooled} probe trained on the mean of all $25$ layers. A descriptor is flagged as a \emph{representational gap} when its best-layer score falls below $R^{2}=0.40$ (regression) or accuracy $=0.65$ (classification); these are exactly the descriptors re-injected by the music-theory branch of Section~\ref{sec:cyclickey}.
 
-Finally, students are required to deliver the proposed table of contents before starting the drafting, and then deliver each chapter as they are completed. The complete thesis must be delivered for final reading to the supervisor and co-supervisor at least one week before the official submission, to allow for a final \textit{proof reading} and the integration of any requested changes.
+\begin{table}[ht]
+\centering
+\small
+\begin{tabular}{l l c c c c}
+\toprule
+\textbf{Descriptor} & \textbf{Probe} & \textbf{Best layer} & \textbf{Best score} & \textbf{Pooled} & \textbf{Gap?} \\
+\midrule
+Spectral centroid        & Ridge $R^{2}$ & 1  & $0.9206$  & $0.8663$  & no \\
+Zero-crossing rate       & Ridge $R^{2}$ & 0  & $0.9566$  & $0.8471$  & no \\
+Spectral contrast (7-d)  & Ridge $R^{2}$ & 3  & $0.7310$  & $0.7270$  & no \\
+Rhythmic stability       & Ridge $R^{2}$ & 0  & $0.7346$  & $0.5630$  & no \\
+Chroma (12-d)            & Ridge $R^{2}$ & 0  & $0.6801$  & $0.5769$  & no \\
+Harmonic mode (binary)   & LogReg acc.   & 11 & $0.6730$  & $0.6730$  & marginal \\
+\textbf{Musical key (12-class)} & LogReg acc. & 2 & $\mathbf{0.5849}$ & $0.5786$ & \textbf{yes} \\
+\textbf{Tempo (BPM)}     & Ridge $R^{2}$ & 0  & $\mathbf{-0.8307}$ & $-2.1155$ & \textbf{yes} \\
+\bottomrule
+\end{tabular}
+\caption{Complete per-descriptor probing results across MERT's $25$ layers (Phase~A). Short-time spectral and chroma descriptors are recovered almost perfectly from the early layers (best layer $0$--$3$); harmonic mode is only marginal; tempo and musical key are genuine gaps, not linearly recoverable anywhere in the network. The negative tempo $R^{2}$ means the probe predicts worse than a constant. Key and mode are estimated with the Krumhansl--Kessler algorithm~\cite{krumhansl_kessler_1982}.}
+\label{tab:probing-full}
+\end{table}
 
-Other details:
-\begin{itemize}
-    \item It is extremely important that the student communicates with supervisors for regular updates, particularly whenever there are significant developments or decisions to be made.
-    \item It is also fundamental that every communication via email takes place always including all supervisors/co-supervisors among the recipients.
-    \item Normally, it is not necessary to come to work in the laboratory; however, if the student prefers, they are welcome. To obtain the access badge, access the portal: \url{https://badge.di.unimi.it/}
-\end{itemize}
+\chapter{Model and Training Configuration}
+\label{app:config}
 
-\section{Bureaucratic Aspects (Bachelor's Degrees)}
-Usually, the internal internship activity for the Bachelor's degree is articulated in the following formal steps:
-\begin{enumerate}
-    \item Choose a topic to work on: it is possible to start from one's own idea or choose a theme among those proposed by the professors.
-    \item Choose a supervisor and co-supervisor: the supervisor must be a faculty member of the Department (Researcher, Associate Professor, or Full Professor).
-    \item Define together with the supervisors: title (even provisional), objectives, and roadmap.
-    \item Proceed with the formal opening of the internship on the platform\\ \url{https://tirocini.di.unimi.it}
-    \item The internship must last at least 14 weeks. During this time, the bulk of the work should be carried out.
-    \item Once the internship is completed, if and only if the supervisor agrees, proceed with the formal closure of the internship. This consists on the one hand of registering for the specific exam session on SIFA/UniMIA by the student, and on the other hand of forwarding the closure request by the supervisor.
-    \item Registration for the graduation session on the Degree Course website\\ \texttt{https://<cdl\_name>.cdl.unimi.it/it/studiare/laurearsi}\\ (e.g. \url{https://informaticamusicale.cdl.unimi.it/it/studiare/laurearsi})
-    \item Delivery of the manuscript and summary in PDF-A format (this template already produces the required format) not exceeding 10MB.
-    \item Public defense, which as such is open to external spectators.
-    \item Celebrations (please remember that these must be carried out with respect for the places and institutions represented).
-\end{enumerate}
+Table~\ref{tab:hyperparams} collects the principal hyperparameters of the Phase~B regressor and the Phase~C explanation layer, for reproducibility. All reported figures follow the single evaluation protocol of Section~\ref{sec:protocol}: five-fold cross-validation with a fixed random seed, so that every excerpt is scored by a model that never trained on it.
 
-\section{Practical Aspects}
-Regarding practical aspects, every supervisor has their own modus operandi for managing thesis students; what is reported below should therefore be considered only as an example; in particular, this is the typical procedure followed by students of the Music Informatics Degree Course:
-\begin{enumerate}
-    \item Analysis of the state of the art (Chap.~\ref{chap:state_of_art}).\\It is important to note everything down right away using \LaTeX, because then it will have to be written in the manuscript.
-    \item Definition of the problem, system ``design'', choice of tools.
-    \item Implementation.
-    \item Definition and execution of the test and/or validation campaign (Chap.~\ref{chap:test}).
-    \item Definition of the thesis table of contents.
-    \item Writing of the manuscript and correction (better if in parallel with other steps).
-    \item Delivery of the manuscript.
-    \item Drafting of the presentation, correction, suggestions.
-\end{enumerate}
-\section{Code Management}
-In most Computer Science Degree Course internships, the student will find themselves writing code. It is advisable to agree on the code sharing method in the preliminary phase.
-Regarding LIM, code relevant to theses is generally versioned on GitHub (\url{https://github.com/LIMUNIMI}).
+\begin{table}[ht]
+\centering
+\small
+\begin{tabular}{l l}
+\toprule
+\textbf{Component} & \textbf{Setting} \\
+\midrule
+MERT backbone            & MERT-v1-330M, $25\times1024$-d, $24$\,kHz, frozen \\
+wav2vec2 backbone        & wav2vec2-base, $13\times768$-d, $16$\,kHz, frozen \\
+Layer fusion             & softmax-weighted sum over layers (per backbone) \\
+Music-theory branch      & gap features: tempo (scalar), key (cyclic, $2$-d) \\
+Bottleneck               & concatenated streams $\rightarrow$ MLP $\rightarrow$ $128$-d, $L_{2}$-normalised \\
+Regression head          & linear $\rightarrow$ (valence, arousal) \\
+Loss weights             & MSE $1.0$, CCC $0.5$, Rank $0.3$, SupCR $0.1$ \\
+Optimiser                & Adam, differential rates (fusion $10^{-2}$, head $10^{-4}$) \\
+Class balancing          & weighted sampler, inverse quadrant frequency \\
+Audio ProtoPNet          & $5$ prototypes/quadrant ($20$ total), squared-Euclidean distance, \\
+                         & identity-prior head, cluster $+$ separation losses \\
+Retrieval                & exact cosine $k$-NN; top-$k=5$, foils $n_{f}=3$ \\
+Explanation LLM (Layer~2)& Qwen2.5-3B-Instruct, HuggingFace \texttt{transformers} \\
+Evaluation               & $5$-fold cross-validation, fixed seed \\
+\bottomrule
+\end{tabular}
+\caption{Principal hyperparameters of the Phase~B model and the Phase~C explanation layer.}
+\label{tab:hyperparams}
+\end{table}
 
-In the case of using git (with any remote, be it GitHub, GitLab, Bitbucket, \dots), the student is advised to have a general basic understanding before using it for their project. A good interactive tutorial is \url{https://learngitbranching.js.org}, although it includes advanced topics that may be beyond the student's immediate needs.
+\chapter{A Complete Worked Explanation}
+\label{app:worked-example}
 
+To show the two-layer explanation pipeline of Section~\ref{sec:rag} end to end, this appendix reproduces the full output for a single query --- song~$562$, a clear high-arousal/high-valence excerpt --- taken from the five-query export. Layer~1 is the deterministic, inspectable record; Layer~2 is the language model's rephrasing of it.
 
-\chapter{Documents to Produce}
-LIM members generally do not require students to submit a hard copy of their work. In other cases, the student is invited to agree on this point with their supervisor.
-Close to the defense, they are required to share in digital format:
-\begin{itemize}
-	\item the final version of the manuscript;
-	\item the summary uploaded to the platform;
-	\item the developed code;
-	\item all support materials used and/or produced;
-	\item the presentation prepared for the defense.
-\end{itemize}
+\section*{Layer 1 --- deterministic template}
 
-Delivery can take place via USB drive or through file sharing systems (WeTransfer, Dropbox, Google Drive, etc.).
+\noindent\textbf{Query (song 562).} Region: high arousal / high valence (HVHA); arousal $0.732$, valence $0.714$; moderate electrodermal activity (rising trend).
 
-\section{Summary}
-Close to the graduation date, students are also required to upload the summary to the platform. Its function is to allow the committee to quickly view the topics treated by each thesis.
+\noindent\textbf{Prototype activation profile (ante-hoc).} Cosine similarity of the query to each quadrant centroid: HVHA $0.6704$ (best match), HVLA $0.6695$, LVHA $0.6327$, LVLA $0.6179$. The top two are almost tied, an honest reflection of the continuous, weakly-clustered geometry of Section~\ref{sec:results-topology}.
 
-The length of such a document should not exceed two pages, and often one page is more than adequate for the purpose. Regarding contents, the summary resumes -- in a very succinct manner -- the outline of the final manuscript, and therefore, for example, the outline proposed in \ref{sec:organization}.
+\begin{table}[ht]
+\centering
+\small
+\begin{tabular}{c c c c c}
+\toprule
+\textbf{Rank} & \textbf{Song ID} & \textbf{Cosine} & \textbf{Arousal} & \textbf{Valence} \\
+\midrule
+1 & 296 & $0.9995$ & $0.817$ & $0.857$ \\
+2 & 909 & $0.9995$ & $0.831$ & $0.683$ \\
+3 & 326 & $0.9995$ & $0.676$ & $0.730$ \\
+4 & 91  & $0.9993$ & $0.873$ & $0.778$ \\
+5 & 821 & $0.9993$ & $0.789$ & $0.794$ \\
+\bottomrule
+\end{tabular}
+\caption{Top-5 retrieved neighbours for song~562. All five lie in the same HVHA quadrant at near-maximal similarity (mean neighbour arousal $0.797$, valence $0.768$), so Precision@$5=1.0$. The contrastive foils (most-dissimilar excerpts) are songs $99$, $704$, and $457$.}
+\label{tab:worked-top5}
+\end{table}
 
-Given the purpose of the document, it is good practice to balance the text so as to dedicate few lines to the state of the art, in favor of the original parts of the thesis.
+\section*{Layer 2 --- language-model synthesis}
 
-\section{Presentation}
-Bachelor's degree students have a maximum of 10 minutes available to present their work, which becomes 15 for Master's degrees. 
+The Qwen2.5-3B-Instruct model receives the Layer~1 record above and is instructed to rewrite it, using only that evidence, into a four-part answer. Its output, verbatim:
 
-It is recommended to rehearse the speech repeatedly, timing oneself and considering setup time for turning on the PC, launching software, switching from one application to another, and so on. It is also noted that it is possible to book the defense room to test connections in advance and verify that images and audio are correctly reproduced.
+\begin{quotation}
+\noindent If you're drawn to music that gets you moving and feeling alive, these tracks carry that same charge. Songs like 296, 91, and 821 are designed to energize your spirit, driving you forward with their powerful beats and uplifting melodies. They fit perfectly because they align beautifully along the V-A plane, offering a high level of arousal and positivity, which perfectly complements your listening profile.
 
-Due to stringent time constraints, it is unlikely that a multimedia presentation can exceed the threshold of 15 slides. This value is purely indicative, because it depends on the information density of the slide and the time dedicated to each slide while presenting.
+\noindent The other tracks, while also energetic and positive, fall short in their emotional intensity, making them less engaging for the type of listener seeking excitement and motivation. Songs like 99, 704, and 457 simply don't match the high arousal and positive valence needed to fully resonate with your mood trajectory.
 
-The most common technological choice is Microsoft PowerPoint, but any alternative (Prezi, Acrobat PDF, \LaTeX, etc.) is admissible. 
+\noindent These songs create a shared physiological and mood experience, evoking a steady escalation of energy and positivity throughout your listening session.
+\end{quotation}
 
-The most common errors to avoid are:
-\begin{itemize}
-	\item slides with too rich textual content;
-	\item slides that will be read word for word during the presentation.
-\end{itemize}
+\noindent Every song the prose names is present in the Layer~1 record --- the neighbours $296$, $91$, $821$ and the foils $99$, $704$, $457$ --- and every directional claim it makes (high arousal, positive valence) matches the retrieved neighbours' coordinates. Its grounding precision is therefore one: the synthesis step adds fluency without introducing any claim the numbers do not support (Section~\ref{sec:results-topology}).
 
-Both problems are solved by setting the text in an extremely schematic manner, tending towards bullet points. Pay attention, however, to use a homogeneous form. 
-For example, the following list would be inelegant, as it includes adjectives, nouns, and complete sentences, and does not make correct use of capitalization:
-\begin{itemize}
-	\item application aesthetically very pleasing;
-	\item There is the possibility to interact with other users;
-	\item the user can export files in XML format.
-\end{itemize}
-
-A possible revision, based only on nouns, is: 
-\begin{itemize}
-	\item aesthetic quality;
-	\item interaction between users;
-	\item XML support.
-\end{itemize}
-
-Another tip to make the presentation cognitively more manageable for the audience is to add a progress indicator at the bottom of each slide (e.g., ``Slide 3 of 15''). In this way, in case the allotted time runs out, the committee will know whether to allow a conclusion (``Slide 14 of 15'') or whether to stop the candidate (``Slide 14 of 138''). In the absence of an indicator, the committee tends to assume the second case.
-
-Regarding the topics to be treated during the discussion, it is appropriate to briefly expose the state of the art to concentrate on one's own work, tests, and results. A technique to understand how much time to dedicate to each topic consists of giving a weight to each part one wants to talk about, then assigning a number of minutes proportional to said weight so as to reach the maximum available time.
-
-Demonstrative videos and \textit{live demos} are welcome, but it is inadvisable to dedicate too much time to these contributions, unless the candidate provides an explanation overlapping the multimedia content.
 
 
 %

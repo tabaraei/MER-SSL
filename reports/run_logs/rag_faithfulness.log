@@ -1,0 +1,55 @@
+==============================================================================
+Phase C RAG — Layer-2 grounding / faithfulness  (illustrative, n=5)
+Index: prototypes_dual.npy | source: artifacts/explanations_5songs.txt
+==============================================================================
+
+SONG 31   query quad=HA/LV  (A=0.606, V=0.397)   recomputed top-5 == printed: True
+  Layer-1 reference set: query+top5+foils = [31, 185, 370, 445, 525, 588, 757, 895, 966]
+    foils (lowest cosine) = [185, 370, 525]
+  (i) IDs named in prose = none (generic references) | ID-GP = N/A
+  (ii) neighbour mean A=0.614 (high), V=0.495 (low)
+       prose claims A=high vs neighbours A=high -> OK
+       prose claims V=low  vs neighbours V=low  -> OK
+       directional faithfulness (this song): PASS
+
+SONG 282   query quad=HA/HV  (A=0.507, V=0.508)   recomputed top-5 == printed: True
+  Layer-1 reference set: query+top5+foils = [4, 267, 282, 398, 399, 591, 697, 751, 783]
+    foils (lowest cosine) = [4, 591, 267]
+  (i) IDs named in prose = none (generic references) | ID-GP = N/A
+  (ii) neighbour mean A=0.535 (high), V=0.438 (low)
+       prose claims A=high vs neighbours A=high -> OK
+       prose claims V=high vs neighbours V=low  -> MISMATCH
+       directional faithfulness (this song): FAIL
+
+SONG 562   query quad=HA/HV  (A=0.732, V=0.714)   recomputed top-5 == printed: True
+  Layer-1 reference set: query+top5+foils = [91, 99, 296, 326, 457, 562, 704, 821, 909]
+    foils (lowest cosine) = [99, 704, 457]
+  (i) IDs named in prose = [296, 91, 821, 99, 704, 457] | grounded = [296, 91, 821, 99, 704, 457] | ID-grounding precision = 1.00
+  (ii) neighbour mean A=0.797 (high), V=0.768 (high)
+       prose claims A=high vs neighbours A=high -> OK
+       prose claims V=high vs neighbours V=high -> OK
+       directional faithfulness (this song): PASS
+
+SONG 706   query quad=LA/HV  (A=0.352, V=0.619)   recomputed top-5 == printed: True
+  Layer-1 reference set: query+top5+foils = [181, 251, 252, 299, 438, 582, 675, 706, 733]
+    foils (lowest cosine) = [675, 438, 252]
+  (i) IDs named in prose = none (generic references) | ID-GP = N/A
+  (ii) neighbour mean A=0.371 (low), V=0.563 (high)
+       prose claims A=low  vs neighbours A=low  -> OK
+       prose claims V=high vs neighbours V=high -> OK
+       directional faithfulness (this song): PASS
+
+SONG 894   query quad=LA/LV  (A=0.324, V=0.317)   recomputed top-5 == printed: True
+  Layer-1 reference set: query+top5+foils = [63, 370, 440, 525, 531, 532, 675, 894, 943]
+    foils (lowest cosine) = [675, 370, 525]
+  (i) IDs named in prose = none (generic references) | ID-GP = N/A
+  (ii) neighbour mean A=0.366 (low), V=0.317 (low)
+       prose claims A=low  vs neighbours A=low  -> OK
+       prose claims V=low  vs neighbours V=low  -> OK
+       directional faithfulness (this song): PASS
+
+------------------------------------------------------------------------------
+AGGREGATE (n=5 songs):
+  ID-grounding precision : mean = 1.00  (over 1 song(s) that name explicit IDs)
+  Directional faithfulness: 4/5 songs fully consistent; 9/10 individual V/A axis-claims correct (0.90)
+------------------------------------------------------------------------------
