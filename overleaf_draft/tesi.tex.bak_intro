@@ -191,41 +191,95 @@ This section, which is optional, contains your acknowledgments.
 \chapter{Introduction}
 \label{ch:introduction}
 
-\section{Motivation and Context}
+This document serves a dual purpose: on one hand, it shows a complete example of a thesis written in \LaTeX\ and compliant with the PDF/A standard; on the other, it contains suggestions and answers to frequently asked questions by students. Therefore, a careful reading is recommended.
 
-Music carries emotion, and Music Emotion Recognition (MER) is the task of teaching a computer to read it. The dominant framework describes emotion not as a list of discrete labels but as a point on two continuous axes: arousal, the energy of a piece from calm to intense, and valence, its positivity from sad to happy. This is Russell's circumplex model of affect~\cite{russell_circumplex_1980}, and it underlies most modern affective computing on music.
+\section{The Template}
+If this document was obtained via direct file sharing, it is advisable to access the continuously updated version available on Overleaf. 
+\begin{center}
+    \url{https://www.overleaf.com/read/hmffzxzhhdqn}
+\end{center}
 
-Recent progress in MER has been driven by Self-Supervised Learning (SSL). Models such as MERT~\cite{li_mert_2024} learn rich audio representations from large unlabelled music collections, without the costly human annotation that supervised methods require. Once trained, these representations transfer well to downstream tasks, including emotion prediction, and a frozen SSL backbone can be turned into an emotion recogniser with only a small amount of labelled data on top.
+This template has been developed over the years by members of the Laboratory of Music Informatics (LIM) at the University of Milan, specifically by: Giorgio Presti, Luca Andrea Ludovico, Federico Avanzini, and Marco Tiraboschi.
 
-Accuracy, however, is not the only thing that matters. The settings where an emotion-aware system is most useful are often the ones where trust is essential. A therapeutic playlist, a mood-regulation tool, or a well-being application does not just need to place a song correctly on the valence--arousal plane; it needs to be able to say why. SSL models are strong predictors but poor explainers: they output a number and offer no account of the musical evidence behind it. For trust-sensitive use, that silence is a real limitation rather than a cosmetic one.
+It was primarily intended for final projects of the Bachelor's Degree in Music Informatics, and later extended to other degree courses of the Department of Computer Science, but it can be adapted for other courses by changing the metadata in the preamble. In the rest of the document, where not specified, we will use the term \textit{thesis} in its generic sense, which includes Bachelor's final projects.
 
-\section{Problem Statement}
+\section{Content}
+\label{sec:content}
 
-Two open problems in the field motivate this work.
+Sometimes, theses can have strong interdisciplinary connotations. However, it is fundamental to remember that these are works in the field of computer science, and this aspect must emerge clearly. Even projects with more humanistic content must show scientific rigor and an effort toward formalization. Concretely, diagrams, tables, graphical and/or mathematical formalisms, and significant portions of code (where possible) are highly appreciated.
 
-The first is the valence ceiling. Across audio-only MER systems, arousal is predicted well but valence is not. Arousal aligns closely with low-level acoustic cues such as tempo, loudness, and spectral energy, which the audio signal carries directly. Valence depends far more on lyrics, harmony, and cultural context, much of which the raw waveform does not contain. The result is a persistent gap between the two axes that stronger audio models alone have not closed.
+A written work of this extent always starts from a prior point, typically the analysis of the state of the art and literature. A personal contribution is then required (and original, in the case of Master's theses) to reach a conclusion formulated by the author, potentially even in contrast with current thought or with what was intended at the beginning of the work.
 
-The second is the black-box problem. SSL-based recognisers map audio to emotion through high-dimensional representations that are not interpretable by inspection. Most retrieval and recommendation systems built on them can rank songs as emotionally similar but cannot justify the ranking in terms a listener would recognise. Explainability is therefore an open requirement for SSL-based MER, not a solved one.
+Three phases must emerge clearly:
+\begin{itemize}
+	\item analysis of the state of the art and/or literature;
+	\item personal contribution to the research;
+	\item conclusions reached, and potential future developments.
+\end{itemize}
 
-\section{Research Questions}
+Taken together, these three components must make the {\em relevance} of the work evident, in terms of:
+\begin{itemize}
+\item clarity in defining the problem, motivations, and objectives of the thesis; 
+\item connection with the literature (to show that the topic of the thesis is of interest to the scientific community);
+\item relevance of the topic within the scope of computer science disciplines.
+\end{itemize}
 
-This thesis examines frozen self-supervised representations for music emotion recognition through three questions, each answered by one phase of the work.
 
-The first asks whether the frozen backbone already encodes musically meaningful structure before any task-specific training, and if so, where in the network that structure lives. The second asks whether these self-supervised embeddings can be mapped accurately onto Russell's valence--arousal plane, and how far that mapping can be pushed on each axis. The third asks whether the learned latent space can support retrieval that explains itself, returning emotionally similar songs together with grounded evidence for why they belong together.
+\section{Thesis Organization}
+\label{sec:organization}
 
-These questions are deliberately empirical. The work is framed as an audit: each component is kept, changed, or discarded on measured evidence, and the experiments that contradict the system's own assumptions are reported as results rather than set aside.
+The choice of how to structure an extended work, such as a final project or a thesis, is neither simple nor unique; therefore, the points listed below should be taken as generic suggestions and adapted to one's personal situation.
 
-\section{Contribution Preview}
+% \begin{figure}[t]
+% 	\centering
+% 	\includegraphics[width = \textwidth, trim={0 25mm 0 0}, clip]{immagini/ideas2text.png}
+% 	\caption{The process of transforming ideas into text~\cite{hamalainen2019web}.}
+% 	\label{fig:ideas2text}
+% \end{figure}
+Before starting to write text, it is fundamental to create a hierarchically organized table of contents (thesis, chapters, sections, subsections, etc.). Once a satisfactory index is obtained, it can be filled with the text of the thesis. 
+A computer science approach to the issue is the following: writing a thesis means starting from a graph of ideas~\cite{hamalainen2019web} and arriving at creating a tree of textual content (a \textit{minimum spanning tree} of the idea graph!). The tree represents the text structure, where the root node is the thesis itself, its children are the chapters, etc. The leaves of the tree represent the finest-level subsections.  
+%
+Ideally, the content tree should have the following characteristics:
+\begin{itemize}
+\item be balanced;
+\item have a height $h=4$ or $5$; 
+\item be an $n$-ary tree with $2\leq n \leq 7$
+\end{itemize}
+The textual content of all nodes at the same level of the tree should also be as balanced as possible (for example, it would be wrong to have one chapter of one page and another of $30$ pages).
+% Chapters into which the work is divided should tend to occupy a homogeneous number of pages. 
+An imbalance in favor of the chapter describing one's specific work and innovative contributions is tolerated.
 
-The central contribution of this thesis is the audit itself --- a set of reproducible statements about what frozen SSL representations do and do not encode about musical emotion. Five results stand out.
+Limited to the second level of the tree (chapters), a purely indicative example of an outline for an experimental thesis is as follows:
+\begin{itemize}
+    \item Table of Contents
+    \item Introduction
+    \item State of the Art Chapter
+    \item Chapter on technologies used\footnote{This chapter can be omitted if the only technologies used are standard tools like Python, JavaScript, C++, Matlab, etc.}
+    \item Chapter on the case study or software implemented
+    \item Chapter on tests performed
+    \item Brief chapter on conclusions and future developments
+    \item Bibliography and potential Webography
+    \item Appendices, if any (e.g., complete code listings, user manual, proofs, etc.)
+\end{itemize}
+It will therefore be appropriate to include, in the introductory chapter, an explicit reference to the document structure. For example: ``The present work is organized as follows: in Chapter 1 \dots''.
 
-A full per-layer probing of MERT locates which musical attributes the frozen network exposes, and finds that two of them, tempo and musical key, are not recoverable anywhere in the network; these diagnosed gaps are then fed back as explicit features to the predictor. A lightweight affective regressor maps the frozen backbones onto the valence--arousal plane under a four-term hybrid objective, with every term justified by ablation rather than by assumption. A learnable Audio ProtoPNet~\cite{chen_protopnet_2019} replaces a weak centroid readout and is the only prototype method in the comparison to beat the majority-class baseline while staying interpretable by construction. A set of clean negative findings tempers the field's expectations: the learned layer weighting collapses to near-uniform, a second speech-trained encoder proves largely redundant, borrowing affect-labelled environmental sound fails to transfer, and correcting the musical-key encoding moves valence not at all. Finally, a two-layer explanation pipeline keeps a fixed, inspectable evidence table separate from the language model that turns it into prose, together with a grounding check that measures how faithfully the words match the evidence.
 
-Together these support a narrow but well-evidenced claim. A frozen SSL backbone can anchor an emotion recogniser that is competitive on the harder valence axis among comparable audio-only methods, while carrying an explanation layer that those methods do not provide. The system predicts arousal well, with $R^{2}$ up to $0.72$; predicts valence up to the audio-only ceiling, with $R^{2}$ near $0.58$; and retrieves emotionally similar songs at roughly twice the random rate, with a Precision@$5$ of $0.594$. All experiments use PMEmo~2019~\cite{zhang_pmemo_2018}, a corpus of $794$ popular-music chorus excerpts annotated with continuous valence--arousal scores.
 
-\section{Thesis Organisation}
+\section{Style and Form}
+\label{sec:form}
 
-The remainder of this thesis is organised as follows. Chapter~\ref{chap:state_of_the_art} reviews the state of the art in self-supervised audio learning, music emotion recognition, and explainable retrieval, and locates the gap this work addresses. Chapter~\ref{ch3} describes the technologies used --- the programming environment and hardware, the self-supervised backbones, the audio-analysis and classical machine-learning tools, and the retrieval and explanation stack. Chapter~\ref{ch4} presents the methodology and system architecture, including the three-phase design and the frozen-backbone strategy. Chapter~\ref{chap:test} reports the experimental results as an empirical audit, giving the negative findings equal weight with the positive ones. Chapter~\ref{ch6} draws the conclusions, states the limitations, and outlines future developments. Three appendices follow: Appendix~\ref{app:probing} gives the full per-layer probing results, Appendix~\ref{app:config} the model and training configuration, and Appendix~\ref{app:worked-example} a complete worked explanation produced by the system.
+
+The style of a scientific thesis must be exact, clear, compact, and objective~\cite{strunk1999style}.
+
+{\em Exact} means that every word used signifies only what it is intended to express. It is appropriate to try to avoid synonyms when referring to important concepts. Where possible, variables should be defined (frequency $f$, time $n$, etc.) and used systematically. Vague and non-quantitative expressions (``quite large'', ``practically all'', ``very few'', \ldots) should be avoided as much as possible. Use pronouns sparingly; it is better to repeat a noun in the text rather than leaving ambiguities.
+
+{\em Clear} means that structure and form must be functional in transmitting information in the most immediate and understandable way. Chapter and section titles must be illustrative of the contents (it is also useful to have brief text at the beginning of a chapter or section before moving to subsections). The text must be logically divided into sentences, paragraphs, and blocks: short, direct, and declarative paragraphs are preferable, limiting subordinate clauses and parentheticals, and blocks must be consistent with the logic of the discourse. The use of technical terms should be limited only to necessary cases. Acronyms must also be used sparingly and explained the first time they are used. 
+
+{\em Compact} means one must write only what is necessary. Repetitions of concepts and observations must be avoided. Descriptions and details not necessary for understanding the general discourse must be limited. In particular, trivial observations that are obvious to the reader should be avoided. Between a verbose form (``in consideration of the fact that\ldots'') and a more synthetic equivalent (``because\ldots''), the latter is preferred.
+
+{\em Objective} means that what is written must be devoid of subjective elements and elements that might influence evaluation. Personal considerations (``I first came up with this idea during\ldots'') must be carefully avoided, as well as debatable statements whose judgment is left to the author's personal opinion. The only way to support such stances is to provide scientific data proving one's thesis, or to refer explicitly to a bibliographic antecedent (``ipse dixit'') citing its source in the bibliography. Finally, the manuscript must be written in an impersonal form. Sentences such as ``During my experience, I deepened the themes\dots'' are easily replaceable with phrases such as ``During the analysis phase, the themes of\dots were investigated''.
+
+Appropriate use of figures and tables is essential to support the points just discussed. Figures and tables must have self-explanatory captions (which do not require reading the main text to understand their meaning). However, the main text must always contain a reference to the figure or table (``As shown in Fig.1, \ldots''). The use of graphical diagrams (an audio processing algorithm block diagram, a software project conceptual schema, etc.) is particularly useful to support the clarity and compactness of the exposition.
 % 
 %			CHAPTER 2: State of the Art
 % 
@@ -367,7 +421,7 @@ The integration of **multimodal signals**, specifically music audio and descript
 
 A significant body of work focuses on adapting and specializing general self-supervised learning (SSL) models for specific MIR tasks, demonstrating their remarkable transferability and generalization capabilities.
 
-Several studies highlight the transfer of pre-trained embeddings to rhythm and tempo analysis. Pitch-oriented SSL representations have also been explored for tempo estimation, where a task-specific head trained on top of the pre-trained features can recover some rhythmic information \cite{gagnere_adapting_2024}. A fully self-supervised approach even reframed tempo estimation as a binary classification problem—determining if two tracks share the same tempo—achieving competitive results without any labeled data \cite{henkel_tempo_2024}. More generally, pre-trained embeddings such as OpenL3 have been shown to provide robust, transferable representations that outperform supervised baselines for various audio classification tasks, especially when labeled data is scarce \cite{grollmisch_analyzing_2021}.
+Several studies highlight the transfer of pre-trained embeddings to rhythm and tempo analysis. Pitch-based SSL models like MERT and wav2vec2 have been successfully adapted for tempo estimation, proving that pitch-oriented features also encode rhythmic cues \cite{gagnere_adapting_2024}. A fully self-supervised approach even reframed tempo estimation as a binary classification problem—determining if two tracks share the same tempo—achieving competitive results without any labeled data \cite{henkel_tempo_2024}. More generally, pre-trained embeddings such as OpenL3 have been shown to provide robust, transferable representations that outperform supervised baselines for various audio classification tasks, especially when labeled data is scarce \cite{grollmisch_analyzing_2021}.
 
 In advanced classification and analysis, MERT is frequently leveraged. MERTech fine-tunes MERT for instrument playing-technique detection by adding multi-task objectives for pitch and onset, yielding strong results by transferring knowledge from the large-scale pre-training \cite{li_mertech_2024}. MERT features are also central to new tasks, such as lead instrument detection in multitrack recordings, where a track-wise attention model with permutation augmentation significantly outperforms traditional baselines \cite{ou_lead_2025}. Further research confirms the strong transferability of SSL models (Wav2Vec2.0, WavLM, MERT) to automatic singing voice understanding tasks, often matching or surpassing supervised performance with limited training data \cite{yamamoto_toward_2023}.
 
