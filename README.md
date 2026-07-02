@@ -1,7 +1,7 @@
 # Explainable Music Emotion Recognition via Self-Supervised Representations
 
 **Master's Thesis** | MSc Computer Science — Music Information Retrieval
-**University of Milan** | Supervisors: Prof. Stavros Ntalampiras, Ali Tabraei
+**University of Milan** | Supervisors: Prof. Stavros Ntalampiras, Ali Tabaraei
 
 ## Overview
 
@@ -154,6 +154,6 @@ while adding an explanation layer none of the baselines provide.
 
 ## Acknowledgements
 
-Supervised by Prof. Stavros Ntalampiras and Ali Tabraei, University of Milan.
+Supervised by Prof. Stavros Ntalampiras and Ali Tabaraei, University of Milan.
 Language model tools were used for prose editing assistance during thesis writing,
 consistent with university policy on AI-assisted academic work.
