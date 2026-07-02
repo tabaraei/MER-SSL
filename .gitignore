@@ -1,20 +1,44 @@
-# Environments
-.venv/
+# --- Python ---
 __pycache__/
+*.pyc
+*.pyo
+*.ipynb_checkpoints
 
-# Large Data & Embeddings
+# --- Environments ---
+.venv/
+venv/
+.env
+
+# --- Model weights & large tensors / embeddings ---
 *.pt
 *.pth
+*.ckpt
 *.npy
-*.mp3
-*.wav
 
-# Third-party code
-mert_fairseq/
+# --- Dataset (kept out of the repo; see data/README.md) ---
+data/pmemo/
+data/*.pkl
 
-# Generated figures / extracted audio
-MERT/ssl_scripts/phaseB/_iadse_audio/
-MERT/ssl_scripts/phaseB/dual_layer_weights.png
+# --- Results (checkpoints, plots) — keep the folder, ignore contents ---
+results/
+!results/.gitkeep
 
-# OS files
+# --- Experiment tracking ---
+wandb/
+mlruns/
+
+# --- Logs / OS ---
+*.log
 .DS_Store
+
+# --- Excluded from the submission repo (kept on disk on the server) ---
+# Active thesis sources, working reports/journals, Claude-Code meta, and the
+# leftover MERT/ tree (upstream license + venv + on-disk embeddings/checkpoints).
+overleaf_draft/
+reports/
+MERT/
+JOURNEY.md
+blueprint.md
+CLAUDE.md
+.claude/
+.mcp.json

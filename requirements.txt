@@ -1,0 +1,32 @@
+# Core deep learning
+torch==2.5.1            # CUDA 12.1 build on the reference machine; CPU fallback supported
+torchaudio==2.5.1
+transformers==4.38.0    # loads frozen MERT-v1-330M and wav2vec2-base
+
+# Numerical / data
+numpy==2.2.6
+pandas==2.3.3
+scipy==1.15.3
+scikit-learn==1.7.2
+
+# Audio + music-theory descriptors
+librosa==0.11.0
+
+# Plotting
+matplotlib==3.10.8
+seaborn==0.13.2
+
+# Utilities
+tqdm==4.66.5
+
+# --- Optional ---------------------------------------------------------------
+# Fast retrieval backend for Phase C (falls back to a scikit-learn cosine k-NN
+# if not installed):
+# faiss-cpu
+#
+# Anthropic backend for the Phase C explanation step (--llm anthropic); the
+# default backend is a locally served HuggingFace model, so this is optional:
+# anthropic
+#
+# Report/figure tooling in scripts/ (generate_report*.py):
+# reportlab
